@@ -2,6 +2,8 @@
 
 A shared whiteboard for two, in the browser. Draw, erase, place text and drop in
 pictures; everything you do appears on the other person's board as you do it.
+Photograph something on your desk and it lands on the board, by pairing a phone
+to the tab you have open.
 
 Boards are peer-to-peer. PeerJS brokers the introduction between two browsers,
 after which board data travels directly over a WebRTC data channel. State is a
@@ -41,12 +43,15 @@ simultaneous edits, room codes, names, and ICE configuration.
 
 `pnpm test:e2e` builds the app, serves it, and drives Chromium through the
 drawing surface: ink, shapes, undo, erase, text placement and pruning, image
-import, zoom, naming, and what survives a reload. One test claims a slot on the
-public PeerJS broker, so it needs the network and says so; a failure there means
-the broker was unreachable rather than the board being broken.
+import, zoom, naming, and what survives a reload. Two specs need the network and
+say so: one claims a slot on the public PeerJS broker, and one pairs a phone page
+to a board and sends a picture across it. A failure in either means the broker
+was unreachable rather than the board being broken.
 
-Neither suite covers two browsers talking to each other. That needs a relay, a
-live broker and two engines, so it stays a manual check before deploying.
+Phone pairing is the only peer to peer path the suite covers, and it covers it
+because both ends are Chromium pages in one browser. Two people on one board
+still needs a relay, a live broker and two engines, so that stays a manual check
+before deploying.
 
 ## The site URL
 
@@ -59,6 +64,36 @@ NEXT_PUBLIC_SITE_URL=https://slate.example.com
 It falls back to `http://localhost:3000`, and like the ICE server list it is read at build time, so a deployment has to be rebuilt after changing it.
 
 Boards under `/b/` carry `noindex` and are excluded from `robots.txt`: a room code is the invitation to a board, so it has no business in a search index.
+
+## Sending a photo from your phone
+
+The Phone button on the toolbar opens a QR code. Scan it and that phone gets a
+page it can take photos on; each one lands on the board as though you had dropped
+the file in yourself, at the middle of whatever you are looking at, without
+changing the tool you are holding.
+
+The phone does not join the board. Boards still hold two, and a phone is paired
+to one tab rather than to the room, so both people can pair their own. What it
+dials is a second peer the tab registers under a random 96 bit nonce, alongside
+the room slot and unaffected by it. The nonce is the whole of the authorisation:
+anyone holding the link can put photos on that board until you press Revoke,
+which retires the link and issues a new one. It is a stronger secret than the
+room code, which is five characters and already lets someone draw.
+
+Pairing lives with the tab that offered it. Close the tab and the phone says the
+link has expired; reload it and the same QR keeps working, because the nonce is
+remembered for that board in this browser.
+
+Photos are downscaled on the phone before they are sent, the same way a dropped
+file is, so what crosses the wire is a webp of at most 1400px rather than a
+camera original. The page uses the phone's own camera app through a file input
+rather than asking for camera access, which means it needs no HTTPS and works
+against a development server on your network. Set `NEXT_PUBLIC_SITE_URL` to an
+address the phone can actually reach, or the QR will point at `localhost`.
+
+One thing worth knowing before you rely on it: a phone on mobile data talking to
+a computer on wifi is the case a direct connection almost never survives, so
+these photos are usually the largest thing your TURN relay ever carries.
 
 ## Connecting through a relay
 
@@ -100,6 +135,6 @@ which is worth knowing given the rest of a board never touches a server.
 
 | Path | Holds |
 | --- | --- |
-| `src/app` | Routes: the lobby at `/`, a board at `/b/[code]`, and the generated icons, social image, `robots.txt`, `sitemap.xml` and web manifest |
+| `src/app` | Routes: the lobby at `/`, a board at `/b/[code]`, the phone sender at `/add/[nonce]`, and the generated icons, social image, `robots.txt`, `sitemap.xml` and web manifest |
 | `src/components` | Board surface, toolbar, lobby and overlays |
-| `src/lib` | Document model, canvas painting, peer link, room codes and the logo mark |
+| `src/lib` | Document model, canvas painting, peer link, phone pairing, room codes and the logo mark |
