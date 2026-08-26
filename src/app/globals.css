@@ -63,10 +63,20 @@
   }
 }
 
+:root {
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+}
+
 html,
 body {
   height: 100%;
   overscroll-behavior: none;
+  /* A tap on the board is a stroke, and the grey flash reads as a page that moved. */
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {

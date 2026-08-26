@@ -88,7 +88,7 @@ export function Lobby() {
               placeholder="BOARD CODE"
               maxLength={ROOM_CODE_LENGTH}
               aria-label="Board code"
-              className="min-w-0 flex-1 rounded-xl border border-line-strong bg-field px-4 py-[14px] text-[15px] font-medium tracking-[0.2em] text-ink uppercase outline-none focus:border-accent focus:bg-white"
+              className="min-w-0 flex-1 rounded-xl border border-line-strong bg-field px-4 py-[14px] text-base font-medium tracking-[0.2em] text-ink uppercase outline-none focus:border-accent focus:bg-white"
             />
             <button
               type="button"

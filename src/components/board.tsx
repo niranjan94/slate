@@ -962,7 +962,7 @@ export function Board({
       : "default";
 
   return (
-    <div className="fixed inset-0 overflow-hidden bg-paper">
+    <div className="fixed inset-x-0 top-0 h-[100dvh] overflow-hidden bg-paper">
       <div
         ref={surfaceRef}
         role="application"
@@ -974,7 +974,7 @@ export function Board({
         onPointerLeave={onPointerLeave}
         onDragOver={(event) => event.preventDefault()}
         onDrop={onDrop}
-        className="absolute inset-0 touch-none bg-paper"
+        className="absolute inset-0 touch-none bg-paper select-none [-webkit-touch-callout:none]"
         style={{
           backgroundImage:
             "radial-gradient(rgb(28 27 25 / 0.13) 1px, transparent 1px)",
@@ -1177,7 +1177,7 @@ export function Board({
         />
       </div>
 
-      <div className="absolute top-[18px] left-[18px] flex items-center gap-2.5">
+      <div className="absolute top-[calc(18px+var(--safe-t))] left-[calc(18px+var(--safe-l))] flex items-center gap-2.5">
         <div className="flex items-center gap-3 rounded-xl border border-line bg-panel px-3.5 py-[9px] shadow-panel">
           <span className="text-base font-semibold tracking-[-0.01em]">
             slate
@@ -1214,7 +1214,7 @@ export function Board({
         <NameChip name={localName} onRename={onRename} />
       </div>
 
-      <div className="absolute top-[18px] right-[18px] flex items-center gap-1 rounded-xl border border-line bg-panel p-[7px] shadow-panel">
+      <div className="absolute top-[calc(18px+var(--safe-t))] right-[calc(18px+var(--safe-r))] flex items-center gap-1 rounded-xl border border-line bg-panel p-[7px] shadow-panel">
         <button
           type="button"
           title="Undo · ⌘Z"
@@ -1283,12 +1283,12 @@ export function Board({
         onZoomReset={() => setView(HOME_VIEW)}
       />
 
-      <div className="pointer-events-none absolute bottom-[88px] left-1/2 -translate-x-1/2 text-[11.5px] leading-[1.5] tracking-[0.01em] whitespace-nowrap text-ink-ghost">
+      <div className="pointer-events-none absolute bottom-[calc(88px+var(--safe-b))] left-1/2 -translate-x-1/2 text-[11.5px] leading-[1.5] tracking-[0.01em] whitespace-nowrap text-ink-ghost">
         {TOOL_STATUS[tool]}
       </div>
 
       {status === "reconnecting" && (
-        <div className="absolute top-[74px] left-1/2 flex -translate-x-1/2 items-center gap-2.5 rounded-[11px] bg-ink px-[15px] py-[9px] text-[13px] text-ink-invert shadow-notice">
+        <div className="absolute top-[calc(74px+var(--safe-t))] left-1/2 flex -translate-x-1/2 items-center gap-2.5 rounded-[11px] bg-ink px-[15px] py-[9px] text-[13px] text-ink-invert shadow-notice">
           <div className="size-[7px] rounded-full bg-amber" />
           <span>Lost the connection · reconnecting</span>
         </div>
@@ -1297,7 +1297,9 @@ export function Board({
       {toast && (
         <div
           className={`pointer-events-none absolute left-1/2 -translate-x-1/2 animate-toast-in rounded-[10px] bg-ink px-4 py-[9px] text-[13px] text-ink-invert ${
-            status === "reconnecting" ? "top-[126px]" : "top-[74px]"
+            status === "reconnecting"
+              ? "top-[calc(126px+var(--safe-t))]"
+              : "top-[calc(74px+var(--safe-t))]"
           }`}
         >
           {toast}

@@ -66,7 +66,7 @@ export function NameChip({ name, onRename }: NameProps) {
           }}
           maxLength={MAX_NAME_LENGTH}
           aria-label="Your name"
-          className={`${INPUT_BASE} w-[110px] px-2 py-[3px] text-[13px] font-medium`}
+          className={`${INPUT_BASE} w-[110px] px-2 py-[3px] text-base font-medium sm:text-[13px]`}
         />
       ) : (
         <button
@@ -108,7 +108,7 @@ export function NameInput({ name, onRename }: NameProps) {
         }}
         maxLength={MAX_NAME_LENGTH}
         placeholder="Type your name"
-        className={`${INPUT_BASE} w-full px-4 py-[13px] text-[15px] font-medium`}
+        className={`${INPUT_BASE} w-full px-4 py-[13px] text-base font-medium`}
       />
     </label>
   );

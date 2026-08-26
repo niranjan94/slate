@@ -59,7 +59,7 @@ export function Toolbar({
         />
       ) : (
         tool === "shape" && (
-          <div className="absolute bottom-[118px] left-1/2 flex -translate-x-1/2 items-center gap-[3px] rounded-xl border border-line bg-panel p-1.5 shadow-panel">
+          <div className="absolute bottom-[calc(118px+var(--safe-b))] left-1/2 flex -translate-x-1/2 items-center gap-[3px] rounded-xl border border-line bg-panel p-1.5 shadow-panel">
             {SHAPES.map((option) => (
               <button
                 key={option.id}
@@ -78,7 +78,7 @@ export function Toolbar({
         )
       )}
 
-      <div className="absolute bottom-[22px] left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-[15px] border border-line bg-panel p-2 shadow-dock">
+      <div className="absolute bottom-[calc(22px+var(--safe-b))] left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-[15px] border border-line bg-panel p-2 shadow-dock">
         <div className="flex items-center gap-0.5">
           {TOOLS.map((option) => (
             <button

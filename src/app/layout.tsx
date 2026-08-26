@@ -76,6 +76,13 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   colorScheme: "light",
   themeColor: brand.paper,
+  // Without cover, the safe area insets read as zero, and the board's chrome has to
+  // know where the notch and the home indicator are to keep clear of them.
+  viewportFit: "cover",
+  // The board is one fixed surface with its chrome floating over it, so the on
+  // screen keyboard has to shorten the viewport rather than slide the dock out
+  // from under the visible part of it.
+  interactiveWidget: "resizes-content",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

@@ -46,7 +46,7 @@ export function TextBox({
       }}
       onBlur={onBlur}
       style={{ color, cursor: caretCursor }}
-      className="min-h-[30px] w-full overflow-hidden border-none bg-transparent px-1 py-0.5 text-[19px] leading-[1.4] outline-none placeholder:text-ink-ghost"
+      className="min-h-[30px] w-full select-text overflow-hidden border-none bg-transparent px-1 py-0.5 text-[19px] leading-[1.4] outline-none placeholder:text-ink-ghost"
     />
   );
 }

@@ -25,7 +25,7 @@ export function PhonePanel({
   onClose,
 }: PhonePanelProps) {
   return (
-    <div className="absolute bottom-[118px] left-1/2 w-[268px] -translate-x-1/2 rounded-xl border border-line bg-panel p-[18px] shadow-panel">
+    <div className="absolute bottom-[calc(118px+var(--safe-b))] left-1/2 w-[268px] -translate-x-1/2 rounded-xl border border-line bg-panel p-[18px] shadow-panel">
       <div className="mb-[3px] text-[10.5px] font-medium tracking-[0.1em] text-ink-ghost uppercase">
         Add from your phone
       </div>
