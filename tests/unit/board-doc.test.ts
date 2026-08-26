@@ -16,6 +16,7 @@ import {
   readElements,
   readNames,
   readStrokes,
+  removeElement,
   strokesOf,
   textBodyOf,
   updateElement,
@@ -124,6 +125,27 @@ describe("elements", () => {
 
   it("ignores an update for an element that is already gone", () => {
     expect(() => updateElement(doc, "missing", { x: 1 })).not.toThrow();
+  });
+
+  it("starts every element unrotated", () => {
+    addImageElement(doc, AUTHOR, 0, 0, "data:,", 1);
+
+    expect(readElements(doc)[0].a).toBe(0);
+  });
+
+  it("rotates an element in place", () => {
+    const id = addImageElement(doc, AUTHOR, 0, 0, "data:,", 1);
+    updateElement(doc, id, { a: 90 });
+
+    expect(readElements(doc)[0].a).toBe(90);
+  });
+
+  it("removes an element and shrugs at one that is already gone", () => {
+    const id = addImageElement(doc, AUTHOR, 0, 0, "data:,", 1);
+    removeElement(doc, id);
+
+    expect(readElements(doc)).toHaveLength(0);
+    expect(() => removeElement(doc, id)).not.toThrow();
   });
 
   it("keeps a text body only for text elements", () => {
@@ -259,6 +281,17 @@ describe("undo scoping", () => {
     undo.undo();
 
     expect(strokesOf(doc).length).toBe(1);
+  });
+
+  it("brings back an element that was removed in this tab", () => {
+    const id = addImageElement(doc, AUTHOR, 0, 0, "data:,", 1);
+    const undo = manager();
+    removeElement(doc, id);
+    expect(readElements(doc)).toHaveLength(0);
+
+    undo.undo();
+
+    expect(readElements(doc)).toHaveLength(1);
   });
 
   it("treats a whole gesture as one step", () => {

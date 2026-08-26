@@ -34,7 +34,7 @@ test("a photo sent from a phone lands on the board", async ({
   await expect.poll(() => pictureCount(page), { timeout: REACHABLE }).toBe(1);
 });
 
-test("an arriving photo leaves the drawing tool alone", async ({
+test("an arriving photo switches to the tool that can move it", async ({
   page,
   context,
 }) => {
@@ -52,7 +52,8 @@ test("an arriving photo leaves the drawing tool alone", async ({
   await phone.getByLabel("Take a photo").setInputFiles(SAMPLE_PNG);
 
   await expect.poll(() => pictureCount(page), { timeout: REACHABLE }).toBe(1);
-  await expect(page.locator("body")).toContainText("drag to draw");
+  await expect(page.locator("body")).toContainText("drag to move");
+  await expect(page.getByRole("button", { name: "Remove" })).toHaveCount(1);
 });
 
 /**

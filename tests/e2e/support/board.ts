@@ -82,3 +82,13 @@ export const pictureCount = (page: Page) =>
           ),
         ).length,
     );
+
+/** Element wrappers carry their rotation as an inline transform, so that is what is read. */
+export const rotations = (page: Page) =>
+  page
+    .locator("div")
+    .evaluateAll((nodes) =>
+      nodes
+        .map((node) => (node as HTMLElement).style.transform)
+        .filter((transform) => transform.startsWith("rotate")),
+    );

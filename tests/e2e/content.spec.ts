@@ -4,6 +4,7 @@ import {
   inkPixels,
   openBoard,
   pictureCount,
+  rotations,
   textValues,
   toolButton,
 } from "./support/board";
@@ -70,6 +71,68 @@ test.describe("images", () => {
     await page.setInputFiles('input[type="file"]', SAMPLE_PNG);
 
     await expect(page.locator("body")).toContainText("drag to move");
+  });
+
+  test("the picture it just placed is the one being handled", async ({
+    page,
+  }) => {
+    await page.setInputFiles('input[type="file"]', SAMPLE_PNG);
+
+    await expect(page.getByRole("button", { name: "Remove" })).toHaveCount(1);
+  });
+
+  test("a picture can be removed once it is placed", async ({ page }) => {
+    await page.setInputFiles('input[type="file"]', SAMPLE_PNG);
+    await expect.poll(() => pictureCount(page)).toBe(1);
+
+    await page.getByRole("button", { name: "Remove" }).click();
+
+    await expect.poll(() => pictureCount(page)).toBe(0);
+  });
+
+  test("removing is undoable like anything else", async ({ page }) => {
+    await page.setInputFiles('input[type="file"]', SAMPLE_PNG);
+    await expect.poll(() => pictureCount(page)).toBe(1);
+    await page.getByRole("button", { name: "Remove" }).click();
+    await expect.poll(() => pictureCount(page)).toBe(0);
+
+    await page.getByRole("button", { name: "Undo" }).click();
+
+    await expect.poll(() => pictureCount(page)).toBe(1);
+  });
+
+  test("the delete key removes the picture in hand", async ({ page }) => {
+    await page.setInputFiles('input[type="file"]', SAMPLE_PNG);
+    await expect.poll(() => pictureCount(page)).toBe(1);
+
+    await page.keyboard.press("Backspace");
+
+    await expect.poll(() => pictureCount(page)).toBe(0);
+  });
+
+  test("nothing is in hand after a click on bare board", async ({ page }) => {
+    await page.setInputFiles('input[type="file"]', SAMPLE_PNG);
+    await expect(page.getByRole("button", { name: "Remove" })).toHaveCount(1);
+
+    await page.mouse.click(900, 620);
+
+    await expect(page.getByRole("button", { name: "Remove" })).toHaveCount(0);
+  });
+
+  test("a picture turns with its rotate handle", async ({ page }) => {
+    await page.setInputFiles('input[type="file"]', SAMPLE_PNG);
+    const handle = page.locator("div[title='Rotate']");
+    const box = await handle.boundingBox();
+    if (!box) throw new Error("no rotate handle to drag");
+
+    await drag(
+      page,
+      [box.x + box.width / 2, box.y + box.height / 2],
+      [box.x + 220, box.y + 220],
+    );
+
+    // An unrotated element carries no transform at all, so one entry is the assertion.
+    await expect.poll(() => rotations(page)).toHaveLength(1);
   });
 });
 
