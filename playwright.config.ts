@@ -21,7 +21,14 @@ export default defineConfig({
     {
       name: "chromium",
       use: devices["Desktop Chrome"],
-      testIgnore: "**/encoding.spec.ts",
+      testIgnore: ["**/encoding.spec.ts", "**/mobile.spec.ts"],
+    },
+    // Touch is dispatched over CDP, so a phone sized Chromium is the only project
+    // that can drive the surface the way a finger does.
+    {
+      name: "mobile",
+      use: devices["Pixel 7"],
+      testMatch: "**/mobile.spec.ts",
     },
     // One spec only: image encoding is the one behaviour that differs by engine in a
     // way Chromium cannot reveal, and a second full pass is not worth the minutes.

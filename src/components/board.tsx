@@ -9,8 +9,10 @@ import {
   clearBoard,
   createInkStroke,
   createShapeStroke,
+  dropStroke,
   duplicateElement,
   elementsOf,
+  inkPointCount,
   LOCAL_ORIGIN,
   pruneEmptyText,
   readElements,
@@ -27,6 +29,13 @@ import {
 } from "@/lib/board-doc";
 import { type CompanionState, companionHostFor } from "@/lib/companion-host";
 import {
+  clampZoom,
+  type Pinch,
+  pinchFrom,
+  pinchView,
+  type SurfacePoint,
+} from "@/lib/gesture";
+import {
   type ImportedImage,
   imageFilesFrom,
   importImage,
@@ -34,13 +43,7 @@ import {
 import { paintBoard, resizeCanvas, type Viewport } from "@/lib/paint";
 import type { LinkStatus } from "@/lib/peer-link";
 import { displayNameFor, inviteUrl } from "@/lib/room";
-import {
-  eraserSize,
-  MAX_ZOOM,
-  MIN_ZOOM,
-  shortcutToTool,
-  TOOL_STATUS,
-} from "@/lib/tools";
+import { eraserSize, shortcutToTool, TOOL_STATUS } from "@/lib/tools";
 import {
   type BoardRoom,
   type PeerPresence,
@@ -62,6 +65,8 @@ const NUDGE_STEP = 1;
 const NUDGE_FAR = 10;
 const DUPLICATE_OFFSET = 28;
 const RIGHT_ANGLE_PULL = 4;
+/** Ink this short at the moment a second finger lands was the finger, not a stroke. */
+const PINCH_FORGIVES_POINTS = 4;
 
 type Gesture =
   | {
@@ -72,6 +77,7 @@ type Gesture =
       panY: number;
     }
   | { type: "draw"; stroke: YStroke; lastX: number; lastY: number }
+  | { type: "pinch"; pinch: Pinch }
   | { type: "shape" }
   | { type: "drag"; id: string; offsetX: number; offsetY: number }
   | {
@@ -100,9 +106,6 @@ type BoardProps = {
 };
 
 const HOME_VIEW: Viewport = { zoom: 1, panX: 0, panY: 0 };
-
-const clampZoom = (zoom: number) =>
-  Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom));
 
 const normalizeAngle = (degrees: number) => ((degrees % 360) + 360) % 360;
 
@@ -167,6 +170,12 @@ export function Board({
   const dprRef = useRef(1);
   const frameRef = useRef<number | null>(null);
   const spaceRef = useRef(false);
+  /** Live touches, in insertion order, so the first two are the ones a pinch follows. */
+  const pointersRef = useRef(new Map<number, SurfacePoint>());
+  const penDownRef = useRef(false);
+  // A pinch leaves one finger on the surface when the other lifts. That finger has
+  // already had its say, so it is ignored until the hand comes off altogether.
+  const holdOffRef = useRef(false);
   const cursorSentRef = useRef(0);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cascadeRef = useRef({ step: 0, at: 0 });
@@ -255,6 +264,14 @@ export function Board({
       }
     };
   }, []);
+
+  const toSurface = useCallback(
+    (clientX: number, clientY: number): SurfacePoint => {
+      const rect = surfaceRef.current?.getBoundingClientRect();
+      return { x: clientX - (rect?.left ?? 0), y: clientY - (rect?.top ?? 0) };
+    },
+    [],
+  );
 
   const toWorld = useCallback((clientX: number, clientY: number) => {
     const surface = surfaceRef.current;
@@ -650,8 +667,46 @@ export function Board({
     [awareness],
   );
 
+  /**
+   * A second finger means the hand came to move the board, not to draw, so whatever
+   * the first finger had started is wound back before the pinch takes over.
+   */
+  const beginPinch = useCallback(() => {
+    const [a, b] = [...pointersRef.current.values()];
+    if (!a || !b) return;
+    const gesture = gestureRef.current;
+
+    if (gesture?.type === "draw") {
+      if (inkPointCount(gesture.stroke) <= PINCH_FORGIVES_POINTS) {
+        dropStroke(doc, gesture.stroke);
+      }
+      undoManager.stopCapturing();
+    } else if (gesture?.type === "shape") {
+      previewRef.current = null;
+      scheduleRedraw();
+    }
+
+    holdOffRef.current = true;
+    gestureRef.current = {
+      type: "pinch",
+      pinch: pinchFrom(a, b, viewRef.current),
+    };
+  }, [doc, undoManager, scheduleRedraw]);
+
   const onPointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
+      // A finger arriving while a stylus is down is a hand resting on the board.
+      if (event.pointerType === "touch" && penDownRef.current) return;
+      if (event.pointerType === "pen") penDownRef.current = true;
+
+      const pointers = pointersRef.current;
+      pointers.set(event.pointerId, toSurface(event.clientX, event.clientY));
+      if (pointers.size === 2) {
+        beginPinch();
+        return;
+      }
+      if (pointers.size > 2 || holdOffRef.current) return;
+
       if (tool === "pan" || spaceRef.current || event.button === 1) {
         gestureRef.current = {
           type: "pan",
@@ -708,12 +763,37 @@ export function Board({
       gestureRef.current = { type: "draw", stroke, lastX: x, lastY: y };
       event.currentTarget.setPointerCapture?.(event.pointerId);
     },
-    [tool, shape, color, width, doc, localClientId, undoManager, toWorld],
+    [
+      tool,
+      shape,
+      color,
+      width,
+      doc,
+      localClientId,
+      undoManager,
+      toWorld,
+      toSurface,
+      beginPinch,
+    ],
   );
 
   const onPointerMove = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
+      const pointers = pointersRef.current;
+      if (pointers.has(event.pointerId)) {
+        pointers.set(event.pointerId, toSurface(event.clientX, event.clientY));
+      }
+
       const gesture = gestureRef.current;
+
+      if (gesture?.type === "pinch") {
+        const [a, b] = [...pointers.values()];
+        if (a && b) setView(pinchView(gesture.pinch, a, b));
+        return;
+      }
+      // An extra finger on the surface must not steer what one finger started.
+      if (pointers.size > 1) return;
+
       const [x, y] = toWorld(event.clientX, event.clientY);
       broadcastCursor(x, y);
 
@@ -775,7 +855,7 @@ export function Board({
         }
       }
     },
-    [doc, toWorld, broadcastCursor, scheduleRedraw],
+    [doc, toWorld, toSurface, broadcastCursor, scheduleRedraw],
   );
 
   /**
@@ -811,10 +891,35 @@ export function Board({
     [doc, undoManager, scheduleRedraw],
   );
 
-  const onPointerLeave = useCallback(() => {
-    endGesture();
-    awareness.setLocalStateField("cursor", null);
-  }, [endGesture, awareness]);
+  const releasePointer = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>, abandoned: boolean) => {
+      const pointers = pointersRef.current;
+      pointers.delete(event.pointerId);
+      if (event.pointerType === "pen") penDownRef.current = false;
+
+      if (gestureRef.current?.type === "pinch") {
+        const [a, b] = [...pointers.values()];
+        // A third finger lifting leaves a pinch going, on whichever two remain.
+        gestureRef.current =
+          a && b
+            ? { type: "pinch", pinch: pinchFrom(a, b, viewRef.current) }
+            : null;
+      } else {
+        endGesture(abandoned);
+      }
+
+      if (pointers.size === 0) holdOffRef.current = false;
+    },
+    [endGesture],
+  );
+
+  const onPointerLeave = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      releasePointer(event, false);
+      awareness.setLocalStateField("cursor", null);
+    },
+    [releasePointer, awareness],
+  );
 
   const copyInvite = useCallback(async () => {
     const url = inviteUrl(code);
@@ -864,8 +969,8 @@ export function Board({
         aria-label="Whiteboard surface"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
-        onPointerUp={() => endGesture()}
-        onPointerCancel={() => endGesture(true)}
+        onPointerUp={(event) => releasePointer(event, false)}
+        onPointerCancel={(event) => releasePointer(event, true)}
         onPointerLeave={onPointerLeave}
         onDragOver={(event) => event.preventDefault()}
         onDrop={onDrop}

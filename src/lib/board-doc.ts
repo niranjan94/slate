@@ -127,6 +127,19 @@ export function appendInkPoints(stroke: YStroke, coords: number[]): void {
   points?.push(coords);
 }
 
+export function inkPointCount(stroke: YStroke): number {
+  const points = stroke.get("points") as Y.Array<number> | undefined;
+  return points ? points.length / 2 : 0;
+}
+
+/** Takes back a stroke that turned out to be the start of something else. */
+export function dropStroke(doc: Y.Doc, stroke: YStroke): void {
+  const strokes = strokesOf(doc);
+  const index = strokes.toArray().indexOf(stroke);
+  if (index === -1) return;
+  doc.transact(() => strokes.delete(index, 1), LOCAL_ORIGIN);
+}
+
 export function createShapeStroke(shape: ShapeStroke): YStroke {
   const stroke = new Y.Map<unknown>();
   stroke.set("kind", "shape");
