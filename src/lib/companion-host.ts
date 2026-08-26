@@ -75,6 +75,9 @@ export class CompanionHost {
     this.dropConnections();
     this.teardownPeer();
     this.seen = [];
+    // Cleared before the new peer opens, so the panel stops offering a QR that
+    // no longer answers.
+    this.nonce = "";
     this.claim(generateCompanionNonce(), true);
   }
 
