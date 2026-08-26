@@ -42,6 +42,24 @@ hold Shift to nudge it ten, `[` and `]` turn it, ⌘D leaves a copy beside it, a
 Backspace takes it off the board. Undo and Redo sit in the top right and answer
 ⌘Z and ⇧⌘Z. Press `?` for the whole list, which is also the button beside them.
 
+## On a phone
+
+One finger does whatever tool you have in hand. Two fingers move around the
+board and zoom it, in any tool, so there is no need to reach for Pan first: if a
+stroke had just started under the first finger it is taken back, unless it was
+long enough to have been meant. Holding a finger still on a picture or a text box
+picks it up whatever tool is in hand, and the same touch carries on into the
+drag, which is how you move something without hunting for Move. The handles keep
+their size and gain a finger's worth of reach around them, and a finger resting
+on the board while a stylus draws is ignored.
+
+Below the width the full dock needs, the dock carries the six tools alone and the
+colours and nib sit in a row above it, for the tools that use them. Everything
+else gathers into the menu beside Undo and Redo: your name, the link, a picture,
+the camera, clearing the board, and the gestures above rather than a list of keys
+the phone does not have. Pairing a phone to the board stays on the devices that
+are not one.
+
 | Script | Does |
 | --- | --- |
 | `pnpm dev` | Development server |
@@ -66,6 +84,12 @@ import, zoom, naming, and what survives a reload. Two specs need the network and
 say so: one claims a slot on the public PeerJS broker, and one pairs a phone page
 to a board and sends a picture across it. A failure in either means the broker
 was unreachable rather than the board being broken.
+
+A phone sized project runs `mobile.spec.ts` over the same build, dispatching real
+touches through CDP: Playwright's own input API drives the mouse, and the surface
+turns on the pointer type and on how many touches are down, so mouse events would
+exercise none of it. That spec is also where the layout is held to fitting, with
+nothing off an edge and nothing too small for a thumb.
 
 Phone pairing is the only peer to peer path the suite covers, and it covers it
 because both ends are Chromium pages in one browser. Two people on one board
