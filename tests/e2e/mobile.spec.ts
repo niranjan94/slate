@@ -14,6 +14,19 @@ const boardTransform = (page: Page) =>
     .first()
     .evaluate((node) => (node as HTMLElement).style.transform);
 
+type TouchWindow = Window & { claimed: boolean[] };
+
+const watchTouches = (page: Page) =>
+  page.evaluate(() => {
+    (window as unknown as TouchWindow).claimed = [];
+    window.addEventListener("touchmove", (event) => {
+      (window as unknown as TouchWindow).claimed.push(event.defaultPrevented);
+    });
+  });
+
+const claimedTouches = (page: Page) =>
+  page.evaluate(() => (window as unknown as TouchWindow).claimed);
+
 test.describe("one finger", () => {
   test("draws", async ({ page }) => {
     await openBoard(page);
@@ -22,6 +35,37 @@ test.describe("one finger", () => {
     await touch.drag([110, 400], [280, 540]);
 
     expect(await inkPixels(page)).toBeGreaterThan(0);
+  });
+
+  /**
+   * iOS cancels a pointer it decides is scrolling, part way through the stroke, and
+   * refusing the touch event is the only thing that holds it off.
+   */
+  test("leaves the browser no say in the touch it draws with", async ({
+    page,
+  }) => {
+    await openBoard(page);
+    const touch = await touchInput(page);
+    await watchTouches(page);
+
+    await touch.drag([110, 400], [280, 540]);
+
+    const claimed = await claimedTouches(page);
+    expect(claimed.length).toBeGreaterThan(0);
+    expect(claimed).not.toContain(false);
+  });
+
+  test("leaves the browser its say where a text box needs the focus", async ({
+    page,
+  }) => {
+    await openBoard(page);
+    const touch = await touchInput(page);
+    await toolButton(page, "Move").click();
+    await watchTouches(page);
+
+    await touch.drag([110, 400], [280, 540]);
+
+    expect(await claimedTouches(page)).not.toContain(true);
   });
 });
 

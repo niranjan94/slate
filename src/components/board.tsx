@@ -347,6 +347,31 @@ export function Board({
     };
   }, []);
 
+  /**
+   * `touch-action: none` is not enough on iOS: Safari still puts the touch through its
+   * own gesture recognition and, once it decides the finger is scrolling, cancels the
+   * pointer part way through the stroke. Refusing the touch events it recognises the
+   * gesture from is the only thing that holds it off. A drawing tool leaves nothing
+   * inside the surface that wanted the click or the focus this default action would
+   * have carried, so the caret is the one thing that has to be let go of by hand.
+   */
+  useEffect(() => {
+    const surface = surfaceRef.current;
+    if (!surface || !drawMode) return;
+    const claim = (event: TouchEvent) => {
+      if (document.activeElement instanceof HTMLTextAreaElement) {
+        document.activeElement.blur();
+      }
+      if (event.cancelable) event.preventDefault();
+    };
+    surface.addEventListener("touchstart", claim, { passive: false });
+    surface.addEventListener("touchmove", claim, { passive: false });
+    return () => {
+      surface.removeEventListener("touchstart", claim);
+      surface.removeEventListener("touchmove", claim);
+    };
+  }, [drawMode]);
+
   const toSurface = useCallback(
     (clientX: number, clientY: number): SurfacePoint => {
       const rect = surfaceRef.current?.getBoundingClientRect();
@@ -861,6 +886,9 @@ export function Board({
       }
       if (pointers.size > 2 || holdOffRef.current) return;
 
+      // The other half of claiming the touch outright, for the same reason.
+      if (drawMode && event.cancelable) event.preventDefault();
+
       if (event.pointerType === "touch" && tool !== "select") {
         const [pressX, pressY] = toWorld(event.clientX, event.clientY);
         const at = pointers.get(event.pointerId);
@@ -929,10 +957,16 @@ export function Board({
       );
       doc.transact(() => strokesOf(doc).push([stroke]), LOCAL_ORIGIN);
       gestureRef.current = { type: "draw", stroke, lastX: x, lastY: y };
-      event.currentTarget.setPointerCapture?.(event.pointerId);
+      // A finger or a stylus was captured by the platform before this handler ran, so
+      // only a mouse still needs taking hold of, to keep a stroke that runs off the
+      // window ending on its own pointerup.
+      if (event.pointerType === "mouse") {
+        event.currentTarget.setPointerCapture?.(event.pointerId);
+      }
     },
     [
       tool,
+      drawMode,
       shape,
       color,
       width,
