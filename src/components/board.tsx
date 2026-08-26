@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   addImageElement,
   addTextElement,
@@ -23,7 +23,12 @@ import {
   updateElement,
   type YStroke,
 } from "@/lib/board-doc";
-import { imageFilesFrom, importImage } from "@/lib/image-import";
+import { type CompanionState, companionHostFor } from "@/lib/companion-host";
+import {
+  type ImportedImage,
+  imageFilesFrom,
+  importImage,
+} from "@/lib/image-import";
 import { paintBoard, resizeCanvas, type Viewport } from "@/lib/paint";
 import type { LinkStatus } from "@/lib/peer-link";
 import { displayNameFor, inviteUrl } from "@/lib/room";
@@ -103,6 +108,8 @@ export function Board({
   const [toast, setToast] = useState("");
   const [gateDismissed, setGateDismissed] = useState(false);
   const [focusedTextId, setFocusedTextId] = useState<string | null>(null);
+  const [phoneOpen, setPhoneOpen] = useState(false);
+  const [companion, setCompanion] = useState<CompanionState | null>(null);
 
   const surfaceRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -117,6 +124,10 @@ export function Board({
   const spaceRef = useRef(false);
   const cursorSentRef = useRef(0);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cascadeRef = useRef({ step: 0, at: 0 });
+
+  // Constructing the host opens nothing; the companion peer waits for a panel open.
+  const host = useMemo(() => companionHostFor(code), [code]);
 
   const drawMode =
     tool === "pen" || tool === "eraser" || tool === "shape" || tool === "pan";
@@ -256,6 +267,18 @@ export function Board({
     [zoomAround],
   );
 
+  /**
+   * Read at the moment a photo arrives rather than closed over: the insert happens in
+   * a data channel callback, with no render between it and whatever pan or zoom is
+   * current. `toWorld` takes client coordinates, so the surface origin has to be added
+   * back in, which is where `zoomToCentre` differs.
+   */
+  const viewportCentre = useCallback(() => {
+    const rect = surfaceRef.current?.getBoundingClientRect();
+    if (!rect) return [0, 0] as const;
+    return toWorld(rect.left + rect.width / 2, rect.top + rect.height / 2);
+  }, [toWorld]);
+
   const undo = useCallback(() => {
     if (undoManager.undoStack.length === 0) {
       showToast("Nothing to undo");
@@ -292,6 +315,55 @@ export function Board({
     [doc, localClientId, undoManager, showToast],
   );
 
+  /** Photos arrive one channel event at a time, so the cascade is carried in a ref. */
+  const acceptPhoto = useCallback(
+    (image: ImportedImage) => {
+      const now = performance.now();
+      const burst = now - cascadeRef.current.at < 6000;
+      const step = burst ? (cascadeRef.current.step + 1) % 6 : 0;
+      cascadeRef.current = { step, at: now };
+
+      const offset = step * 28;
+      const [centreX, centreY] = viewportCentre();
+      addImageElement(
+        doc,
+        localClientId,
+        centreX - 140 + offset,
+        centreY - 140 / image.ratio + offset,
+        image.src,
+        image.ratio,
+      );
+      undoManager.stopCapturing();
+      // No setTool: an arrival must not pull the tool out from under a stroke.
+      showToast("Photo from your phone");
+    },
+    [doc, localClientId, undoManager, showToast, viewportCentre],
+  );
+
+  useEffect(
+    () => host.attach({ onState: setCompanion, onImage: acceptPhoto }),
+    [host, acceptPhoto],
+  );
+
+  useEffect(() => host.setName(localName), [host, localName]);
+
+  const copyPhoneLink = useCallback(async () => {
+    const url = companion?.url;
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+      showToast("Phone link copied");
+    } catch {
+      showToast(url);
+    }
+  }, [companion, showToast]);
+
+  const togglePhone = useCallback(() => {
+    // Opening is a click, never an effect, so a strict mode remount cannot double it.
+    if (!phoneOpen) host.start();
+    setPhoneOpen((open) => !open);
+  }, [host, phoneOpen]);
+
   useEffect(() => {
     const onPaste = (event: ClipboardEvent) => {
       const files = imageFilesFrom(event.clipboardData?.files);
@@ -308,7 +380,19 @@ export function Board({
     };
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.code === "Space" && !isTypingTarget(event.target)) {
+      if (event.key === "Escape") {
+        if (phoneOpen) {
+          event.preventDefault();
+          setPhoneOpen(false);
+        }
+        return;
+      }
+      // A focused panel button turns Space into a click and would leave pan mode stuck on.
+      if (
+        event.code === "Space" &&
+        !phoneOpen &&
+        !isTypingTarget(event.target)
+      ) {
         spaceRef.current = true;
         return;
       }
@@ -318,7 +402,12 @@ export function Board({
         else undo();
         return;
       }
-      if (isTypingTarget(event.target) || event.metaKey || event.ctrlKey)
+      if (
+        phoneOpen ||
+        isTypingTarget(event.target) ||
+        event.metaKey ||
+        event.ctrlKey
+      )
         return;
       const next = shortcutToTool(event.key);
       if (next) setTool(next);
@@ -334,7 +423,7 @@ export function Board({
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
     };
-  }, [undo, undoManager]);
+  }, [undo, undoManager, phoneOpen]);
 
   const broadcastCursor = useCallback(
     (worldX: number, worldY: number) => {
@@ -733,6 +822,10 @@ export function Board({
         }}
         onSelectWidth={setWidth}
         onPickImage={() => fileInputRef.current?.click()}
+        phone={phoneOpen ? companion : null}
+        onTogglePhone={togglePhone}
+        onRevokePhone={() => host.revoke()}
+        onCopyPhoneLink={() => void copyPhoneLink()}
         onZoomIn={() => zoomToCentre(1.2)}
         onZoomOut={() => zoomToCentre(1 / 1.2)}
         onZoomReset={() => setView({ zoom: 1, panX: 0, panY: 0 })}
@@ -750,7 +843,11 @@ export function Board({
       )}
 
       {toast && (
-        <div className="pointer-events-none absolute top-[74px] left-1/2 -translate-x-1/2 animate-toast-in rounded-[10px] bg-ink px-4 py-[9px] text-[13px] text-ink-invert">
+        <div
+          className={`pointer-events-none absolute left-1/2 -translate-x-1/2 animate-toast-in rounded-[10px] bg-ink px-4 py-[9px] text-[13px] text-ink-invert ${
+            status === "reconnecting" ? "top-[126px]" : "top-[74px]"
+          }`}
+        >
           {toast}
         </div>
       )}

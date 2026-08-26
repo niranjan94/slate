@@ -1,7 +1,9 @@
 "use client";
 
 import type { ShapeId, ToolId } from "@/lib/board-doc";
+import type { CompanionState } from "@/lib/companion-host";
 import { SHAPES, SWATCHES, TOOLS, WIDTHS } from "@/lib/tools";
+import { PhonePanel } from "./phone-panel";
 
 const TOOL_BUTTON =
   "cursor-pointer rounded-[10px] px-[13px] py-[9px] text-[13.5px] font-medium transition-colors";
@@ -12,11 +14,16 @@ type ToolbarProps = {
   color: string;
   width: number;
   zoomLabel: string;
+  /** Non-null exactly while the phone panel is open, so one prop carries the gate and the contents. */
+  phone: CompanionState | null;
   onSelectTool: (tool: ToolId) => void;
   onSelectShape: (shape: ShapeId) => void;
   onSelectColor: (color: string) => void;
   onSelectWidth: (width: number) => void;
   onPickImage: () => void;
+  onTogglePhone: () => void;
+  onRevokePhone: () => void;
+  onCopyPhoneLink: () => void;
   onZoomIn: () => void;
   onZoomOut: () => void;
   onZoomReset: () => void;
@@ -28,34 +35,47 @@ export function Toolbar({
   color,
   width,
   zoomLabel,
+  phone,
   onSelectTool,
   onSelectShape,
   onSelectColor,
   onSelectWidth,
   onPickImage,
+  onTogglePhone,
+  onRevokePhone,
+  onCopyPhoneLink,
   onZoomIn,
   onZoomOut,
   onZoomReset,
 }: ToolbarProps) {
   return (
     <>
-      {tool === "shape" && (
-        <div className="absolute bottom-[118px] left-1/2 flex -translate-x-1/2 items-center gap-[3px] rounded-xl border border-line bg-panel p-1.5 shadow-panel">
-          {SHAPES.map((option) => (
-            <button
-              key={option.id}
-              type="button"
-              onClick={() => onSelectShape(option.id)}
-              className={`cursor-pointer rounded-lg px-3 py-[7px] text-[13px] font-medium transition-colors ${
-                shape === option.id
-                  ? "bg-active text-ink"
-                  : "text-ink-muted hover:bg-hover"
-              }`}
-            >
-              {option.name}
-            </button>
-          ))}
-        </div>
+      {phone ? (
+        <PhonePanel
+          state={phone}
+          onCopy={onCopyPhoneLink}
+          onRevoke={onRevokePhone}
+          onClose={onTogglePhone}
+        />
+      ) : (
+        tool === "shape" && (
+          <div className="absolute bottom-[118px] left-1/2 flex -translate-x-1/2 items-center gap-[3px] rounded-xl border border-line bg-panel p-1.5 shadow-panel">
+            {SHAPES.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => onSelectShape(option.id)}
+                className={`cursor-pointer rounded-lg px-3 py-[7px] text-[13px] font-medium transition-colors ${
+                  shape === option.id
+                    ? "bg-active text-ink"
+                    : "text-ink-muted hover:bg-hover"
+                }`}
+              >
+                {option.name}
+              </button>
+            ))}
+          </div>
+        )
       )}
 
       <div className="absolute bottom-[22px] left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-[15px] border border-line bg-panel p-2 shadow-dock">
@@ -82,6 +102,17 @@ export function Toolbar({
             className={`${TOOL_BUTTON} text-ink-soft hover:bg-hover`}
           >
             Image
+          </button>
+          <button
+            type="button"
+            title="send a photo from your phone"
+            aria-pressed={phone !== null}
+            onClick={onTogglePhone}
+            className={`${TOOL_BUTTON} ${
+              phone ? "bg-active text-ink" : "text-ink-soft hover:bg-hover"
+            }`}
+          >
+            Phone
           </button>
         </div>
 
