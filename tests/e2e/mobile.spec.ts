@@ -1,5 +1,11 @@
 import { expect, type Page, test } from "@playwright/test";
-import { inkPixels, openBoard, toolButton, zoomLabel } from "./support/board";
+import {
+  inkPixels,
+  openBoard,
+  pictureCount,
+  toolButton,
+  zoomLabel,
+} from "./support/board";
 import { touchInput } from "./support/touch";
 
 const boardTransform = (page: Page) =>
@@ -201,4 +207,76 @@ test.describe("the dock on a phone", () => {
       page.getByRole("button", { name: "Copy the link" }),
     ).toBeHidden();
   });
+});
+
+const addPicture = async (page: Page) => {
+  await page.setInputFiles(
+    'input[type="file"]',
+    "tests/e2e/fixtures/sample.png",
+  );
+  await expect.poll(() => pictureCount(page)).toBe(1);
+};
+
+test.describe("holding a finger on something", () => {
+  test("picks it up, whatever tool is in hand", async ({ page }) => {
+    await openBoard(page);
+    const touch = await touchInput(page);
+    await addPicture(page);
+    await toolButton(page, "Draw").click();
+
+    await touch.press([206, 500], 600);
+    await touch.up();
+
+    await expect(page.getByText("Picked up")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Remove" })).toBeVisible();
+  });
+
+  test("draws as usual where there is nothing to pick up", async ({ page }) => {
+    await openBoard(page);
+    const touch = await touchInput(page);
+
+    await touch.press([120, 300], 600);
+    await touch.move([260, 460]);
+    await touch.up();
+
+    expect(await inkPixels(page)).toBeGreaterThan(0);
+    await expect(page.getByText("Picked up")).toBeHidden();
+  });
+
+  test("leaves the stroke alone once the finger has travelled", async ({
+    page,
+  }) => {
+    await openBoard(page);
+    const touch = await touchInput(page);
+    await addPicture(page);
+    await toolButton(page, "Draw").click();
+
+    await touch.down([206, 500]);
+    await touch.move([240, 520]);
+    await page.waitForTimeout(600);
+    await touch.up();
+
+    await expect(page.getByText("Picked up")).toBeHidden();
+    expect(await inkPixels(page)).toBeGreaterThan(0);
+  });
+});
+
+test("a handle answers a finger that lands near it rather than on it", async ({
+  page,
+}) => {
+  await openBoard(page);
+  const touch = await touchInput(page);
+  await addPicture(page);
+
+  const remove = await page
+    .getByRole("button", { name: "Remove" })
+    .boundingBox();
+  expect(remove).not.toBeNull();
+  if (!remove) return;
+  expect(remove.width).toBeGreaterThanOrEqual(40);
+
+  // The corner of the reach, well outside the dot that is drawn.
+  await touch.tap([remove.x + 4, remove.y + 4]);
+
+  await expect.poll(() => pictureCount(page)).toBe(0);
 });

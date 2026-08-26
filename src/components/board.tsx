@@ -35,6 +35,7 @@ import {
   pinchView,
   type SurfacePoint,
 } from "@/lib/gesture";
+import { topmostAt } from "@/lib/hit-test";
 import {
   type ImportedImage,
   imageFilesFrom,
@@ -67,6 +68,8 @@ const CURSOR_BROADCAST_MS = 40;
 const MIN_POINT_DISTANCE = 1.2;
 const MIN_SHAPE_SIZE = 6;
 const MIN_ELEMENT_WIDTH = 60;
+/** Stands in for a text box's laid out height before it has been measured. */
+const MIN_ELEMENT_HEIGHT = 30;
 const ANGLE_STEP = 15;
 const NUDGE_STEP = 1;
 const NUDGE_FAR = 10;
@@ -74,6 +77,17 @@ const DUPLICATE_OFFSET = 28;
 const RIGHT_ANGLE_PULL = 4;
 /** Ink this short at the moment a second finger lands was the finger, not a stroke. */
 const PINCH_FORGIVES_POINTS = 4;
+const LONG_PRESS_MS = 420;
+/** Travel that means the finger is drawing rather than holding still. */
+const LONG_PRESS_SLOP = 10;
+const HANDLE_REACH = 44;
+const MOUSE_REACH = 18;
+/**
+ * A finger sized handle centred on the corner would cover the corner, and on a small
+ * picture the handles together would leave no body left to drag. Pushing them out
+ * keeps most of that reach outside the box.
+ */
+const HANDLE_PUSH = 8;
 
 type Gesture =
   | {
@@ -131,6 +145,46 @@ function snapAngle(degrees: number, stepped: boolean): number {
     : angle;
 }
 
+/**
+ * Handles hold their size on screen at any zoom, which is why every measurement here
+ * is divided by it. `reach` is the part a finger has to land on and stays invisible;
+ * `visual` is the dot that is drawn in the middle of it.
+ */
+function handleFrame(
+  reach: number,
+  visual: number,
+  zoom: number,
+): React.CSSProperties {
+  return {
+    position: "absolute",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: `${Math.max(reach, visual) / zoom}px`,
+    height: `${Math.max(reach, visual) / zoom}px`,
+    padding: 0,
+    border: "none",
+    background: "transparent",
+    touchAction: "none",
+  };
+}
+
+const dotStyle = (
+  visual: number,
+  zoom: number,
+  radius: string,
+): React.CSSProperties => ({
+  width: `${visual / zoom}px`,
+  height: `${visual / zoom}px`,
+  borderRadius: radius,
+  background: "#fff",
+  border: `${1.5 / zoom}px solid oklch(0.62 0.19 250)`,
+});
+
+/** Offsets the frame so its centre lands where the dot's centre used to. */
+const frameOffset = (reach: number, visual: number, zoom: number) =>
+  Math.max(reach, visual) / 2 / zoom;
+
 function peerLabel(status: LinkStatus, peers: PeerPresence[]): string {
   if (status === "connected" && peers.length > 0) return peers[0].name;
   if (status === "full") return "board full";
@@ -167,6 +221,9 @@ export function Board({
 
   const narrow = useNarrowScreen();
   const coarse = useCoarsePointer();
+  // Read from callbacks that a re-render would otherwise have to be threaded into.
+  const coarseRef = useRef(coarse);
+  coarseRef.current = coarse;
 
   const surfaceRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -187,6 +244,14 @@ export function Board({
   // A pinch leaves one finger on the surface when the other lifts. That finger has
   // already had its say, so it is ignored until the hand comes off altogether.
   const holdOffRef = useRef(false);
+  const pressRef = useRef<{
+    timer: ReturnType<typeof setTimeout>;
+    pointerId: number;
+    x: number;
+    y: number;
+  } | null>(null);
+  /** The laid out wrapper of each element, which is where its height comes from. */
+  const nodesRef = useRef(new Map<string, HTMLDivElement>());
   const cursorSentRef = useRef(0);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cascadeRef = useRef({ step: 0, at: 0 });
@@ -272,6 +337,10 @@ export function Board({
       if (toastTimerRef.current) {
         clearTimeout(toastTimerRef.current);
         toastTimerRef.current = null;
+      }
+      if (pressRef.current) {
+        clearTimeout(pressRef.current.timer);
+        pressRef.current = null;
       }
     };
   }, []);
@@ -401,7 +470,11 @@ export function Board({
       if (placed) {
         setTool("select");
         setSelectedId(placed);
-        showToast("Drag to move · corner resizes · Backspace removes");
+        showToast(
+          coarseRef.current
+            ? "Drag to move · corner resizes · × removes"
+            : "Drag to move · corner resizes · Backspace removes",
+        );
       }
     },
     [doc, localClientId, undoManager, showToast],
@@ -684,6 +757,56 @@ export function Board({
     [awareness],
   );
 
+  const cancelLongPress = useCallback(() => {
+    const press = pressRef.current;
+    if (!press) return;
+    clearTimeout(press.timer);
+    pressRef.current = null;
+  }, []);
+
+  /**
+   * Holding a finger on something picks it up, whatever tool is in hand. Without it
+   * the only way to move a picture on a phone is to find Move first, and a finger
+   * has no equivalent of noticing that the cursor changed over it.
+   */
+  const takeHold = useCallback(
+    (worldX: number, worldY: number) => {
+      const held = topmostAt(
+        elementsRef.current.map((element) => ({
+          element,
+          height:
+            nodesRef.current.get(element.id)?.offsetHeight ??
+            (element.type === "image"
+              ? element.w / (element.ratio || 1.4)
+              : MIN_ELEMENT_HEIGHT),
+        })),
+        worldX,
+        worldY,
+      );
+      if (!held) return;
+
+      const gesture = gestureRef.current;
+      // A press that held still long enough to count has no stroke worth keeping.
+      if (gesture?.type === "draw") dropStroke(doc, gesture.stroke);
+      if (gesture?.type === "shape") {
+        previewRef.current = null;
+        scheduleRedraw();
+      }
+
+      setTool("select");
+      setSelectedId(held.id);
+      // The finger is already on it, so the same touch carries on into the drag.
+      gestureRef.current = {
+        type: "drag",
+        id: held.id,
+        offsetX: worldX - held.x,
+        offsetY: worldY - held.y,
+      };
+      showToast("Picked up · drag it where you want it");
+    },
+    [doc, scheduleRedraw, showToast],
+  );
+
   /**
    * A second finger means the hand came to move the board, not to draw, so whatever
    * the first finger had started is wound back before the pinch takes over.
@@ -703,12 +826,13 @@ export function Board({
       scheduleRedraw();
     }
 
+    cancelLongPress();
     holdOffRef.current = true;
     gestureRef.current = {
       type: "pinch",
       pinch: pinchFrom(a, b, viewRef.current),
     };
-  }, [doc, undoManager, scheduleRedraw]);
+  }, [doc, undoManager, scheduleRedraw, cancelLongPress]);
 
   const onPointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
@@ -723,6 +847,20 @@ export function Board({
         return;
       }
       if (pointers.size > 2 || holdOffRef.current) return;
+
+      if (event.pointerType === "touch" && tool !== "select") {
+        const [pressX, pressY] = toWorld(event.clientX, event.clientY);
+        const at = pointers.get(event.pointerId);
+        pressRef.current = {
+          timer: setTimeout(() => {
+            pressRef.current = null;
+            takeHold(pressX, pressY);
+          }, LONG_PRESS_MS),
+          pointerId: event.pointerId,
+          x: at?.x ?? 0,
+          y: at?.y ?? 0,
+        };
+      }
 
       if (tool === "pan" || spaceRef.current || event.button === 1) {
         gestureRef.current = {
@@ -791,6 +929,7 @@ export function Board({
       toWorld,
       toSurface,
       beginPinch,
+      takeHold,
     ],
   );
 
@@ -799,6 +938,17 @@ export function Board({
       const pointers = pointersRef.current;
       if (pointers.has(event.pointerId)) {
         pointers.set(event.pointerId, toSurface(event.clientX, event.clientY));
+      }
+
+      const press = pressRef.current;
+      const at = pointers.get(event.pointerId);
+      if (
+        press &&
+        at &&
+        press.pointerId === event.pointerId &&
+        Math.abs(at.x - press.x) + Math.abs(at.y - press.y) > LONG_PRESS_SLOP
+      ) {
+        cancelLongPress();
       }
 
       const gesture = gestureRef.current;
@@ -872,7 +1022,7 @@ export function Board({
         }
       }
     },
-    [doc, toWorld, toSurface, broadcastCursor, scheduleRedraw],
+    [doc, toWorld, toSurface, broadcastCursor, scheduleRedraw, cancelLongPress],
   );
 
   /**
@@ -913,6 +1063,7 @@ export function Board({
       const pointers = pointersRef.current;
       pointers.delete(event.pointerId);
       if (event.pointerType === "pen") penDownRef.current = false;
+      cancelLongPress();
 
       if (gestureRef.current?.type === "pinch") {
         const [a, b] = [...pointers.values()];
@@ -927,7 +1078,7 @@ export function Board({
 
       if (pointers.size === 0) holdOffRef.current = false;
     },
-    [endGesture],
+    [endGesture, cancelLongPress],
   );
 
   const onPointerLeave = useCallback(
@@ -969,6 +1120,9 @@ export function Board({
       status === "waiting" ||
       status === "full" ||
       status === "error");
+
+  const reach = coarse ? HANDLE_REACH : MOUSE_REACH;
+  const push = coarse ? HANDLE_PUSH : 0;
 
   const surfaceCursor = drawMode
     ? tool === "pan"
@@ -1012,6 +1166,11 @@ export function Board({
             return (
               <div
                 key={element.id}
+                ref={(node) => {
+                  const nodes = nodesRef.current;
+                  if (node) nodes.set(element.id, node);
+                  else nodes.delete(element.id);
+                }}
                 onPointerDown={(event) => {
                   if (drawMode) return;
                   event.stopPropagation();
@@ -1097,19 +1256,15 @@ export function Board({
                         };
                       }}
                       style={{
-                        position: "absolute",
+                        ...handleFrame(reach, 13, view.zoom),
                         left: "50%",
-                        top: `${-27 / view.zoom}px`,
-                        width: `${13 / view.zoom}px`,
-                        height: `${13 / view.zoom}px`,
-                        marginLeft: `${-6.5 / view.zoom}px`,
-                        borderRadius: "50%",
-                        background: "#fff",
-                        border: `${1.5 / view.zoom}px solid oklch(0.62 0.19 250)`,
+                        marginLeft: `${-frameOffset(reach, 13, view.zoom)}px`,
+                        top: `${-20.5 / view.zoom - frameOffset(reach, 13, view.zoom)}px`,
                         cursor: "grab",
-                        touchAction: "none",
                       }}
-                    />
+                    >
+                      <span style={dotStyle(13, view.zoom, "50%")} />
+                    </div>
 
                     <button
                       type="button"
@@ -1118,25 +1273,25 @@ export function Board({
                       onPointerDown={(event) => event.stopPropagation()}
                       onClick={removeSelected}
                       style={{
-                        position: "absolute",
-                        right: `${-9 / view.zoom}px`,
-                        top: `${-9 / view.zoom}px`,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        width: `${18 / view.zoom}px`,
-                        height: `${18 / view.zoom}px`,
-                        padding: 0,
-                        borderRadius: "50%",
-                        background: "#fff",
-                        border: `${1.5 / view.zoom}px solid oklch(0.62 0.19 250)`,
-                        color: "oklch(0.62 0.19 250)",
-                        fontSize: `${13 / view.zoom}px`,
-                        lineHeight: 1,
+                        ...handleFrame(reach, 18, view.zoom),
+                        right: `${-push / view.zoom - frameOffset(reach, 18, view.zoom)}px`,
+                        top: `${-push / view.zoom - frameOffset(reach, 18, view.zoom)}px`,
                         cursor: "pointer",
                       }}
                     >
-                      ×
+                      <span
+                        style={{
+                          ...dotStyle(18, view.zoom, "50%"),
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: "oklch(0.62 0.19 250)",
+                          fontSize: `${13 / view.zoom}px`,
+                          lineHeight: 1,
+                        }}
+                      >
+                        ×
+                      </span>
                     </button>
 
                     {element.type === "image" && (
@@ -1155,18 +1310,14 @@ export function Board({
                           };
                         }}
                         style={{
-                          position: "absolute",
-                          right: `${-7 / view.zoom}px`,
-                          bottom: `${-7 / view.zoom}px`,
-                          width: `${13 / view.zoom}px`,
-                          height: `${13 / view.zoom}px`,
-                          borderRadius: "3px",
-                          background: "#fff",
-                          border: `${1.5 / view.zoom}px solid oklch(0.62 0.19 250)`,
+                          ...handleFrame(reach, 13, view.zoom),
+                          right: `${(-0.5 - push) / view.zoom - frameOffset(reach, 13, view.zoom)}px`,
+                          bottom: `${(-0.5 - push) / view.zoom - frameOffset(reach, 13, view.zoom)}px`,
                           cursor: "nwse-resize",
-                          touchAction: "none",
                         }}
-                      />
+                      >
+                        <span style={dotStyle(13, view.zoom, "3px")} />
+                      </div>
                     )}
                   </>
                 )}
@@ -1423,7 +1574,11 @@ export function Board({
         onChange={(event) => {
           const files = imageFilesFrom(event.target.files);
           event.target.value = "";
-          if (files.length > 0) void addImages(files, 140, 150);
+          if (files.length === 0) return;
+          // A fixed corner puts a picture off the side of a phone, so it lands
+          // where the board is being looked at, as a dropped one does.
+          const [centreX, centreY] = viewportCentre();
+          void addImages(files, centreX - 140, centreY - 100);
         }}
       />
 
