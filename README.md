@@ -24,6 +24,13 @@ Everyone arrives under a generated name and can change it, in the panel that
 covers a new board or from the chip in the top left. The name is kept in this
 browser and carries across boards.
 
+Move mode carries the handles for whatever you have placed. Click it to take it
+in hand, then drag it about, drag the corner of a picture to resize it, drag the
+handle above it to turn it, and press Backspace or the button in its corner to
+take it off the board. Turning lands on a right angle when it is close to one,
+or steps in fifteens while Shift is held. All of it is undoable, and a picture
+you have just added arrives already in hand.
+
 | Script | Does |
 | --- | --- |
 | `pnpm dev` | Development server |
@@ -69,8 +76,9 @@ Boards under `/b/` carry `noindex` and are excluded from `robots.txt`: a room co
 
 The Phone button on the toolbar opens a QR code. Scan it and that phone gets a
 page it can take photos on; each one lands on the board as though you had dropped
-the file in yourself, at the middle of whatever you are looking at, without
-changing the tool you are holding.
+the file in yourself, at the middle of whatever you are looking at and in hand
+ready to be moved. A photo arriving mid stroke leaves the pen where it is rather
+than taking the tool out from under you.
 
 The phone does not join the board. Boards still hold two, and a phone is paired
 to one tab rather than to the room, so both people can pair their own. What it
