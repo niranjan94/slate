@@ -1,5 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
-import { inkPixels, openBoard, zoomLabel } from "./support/board";
+import { inkPixels, openBoard, toolButton, zoomLabel } from "./support/board";
 import { touchInput } from "./support/touch";
 
 const boardTransform = (page: Page) =>
@@ -113,5 +113,92 @@ test.describe("a phone on its side", () => {
     await done.click();
 
     await expect(done).toBeHidden();
+  });
+});
+
+/** Every control has to be inside the screen and big enough to hit with a thumb. */
+const controls = (page: Page) =>
+  page.locator("button").evaluateAll((nodes) =>
+    nodes
+      .map((node) => {
+        const box = node.getBoundingClientRect();
+        return {
+          label: (
+            node.getAttribute("aria-label") ||
+            node.textContent ||
+            "?"
+          ).trim(),
+          width: box.width,
+          height: box.height,
+          offScreen:
+            box.left < -0.5 ||
+            box.right > window.innerWidth + 0.5 ||
+            box.top < -0.5 ||
+            box.bottom > window.innerHeight + 0.5,
+        };
+      })
+      .filter((control) => control.width > 0),
+  );
+
+test.describe("the dock on a phone", () => {
+  test("puts every tool on the screen", async ({ page }) => {
+    await openBoard(page);
+
+    for (const label of ["Draw", "Erase", "Text", "Shape", "Move", "Pan"]) {
+      await expect(toolButton(page, label)).toBeInViewport();
+    }
+  });
+
+  test("leaves nothing off the edge and nothing too small to hit", async ({
+    page,
+  }) => {
+    await openBoard(page);
+
+    const found = await controls(page);
+    expect(found.filter((control) => control.offScreen)).toEqual([]);
+    expect(found.filter((control) => control.height < 36)).toEqual([]);
+  });
+
+  test("keeps the pen reachable after another tool has been used", async ({
+    page,
+  }) => {
+    await openBoard(page);
+    const touch = await touchInput(page);
+
+    await toolButton(page, "Move").click();
+    await toolButton(page, "Draw").click();
+    await touch.drag([110, 400], [280, 520]);
+
+    expect(await inkPixels(page)).toBeGreaterThan(0);
+  });
+
+  test("offers the colours and the nib for the tools that use them", async ({
+    page,
+  }) => {
+    await openBoard(page);
+
+    await expect(page.getByRole("button", { name: "Blue" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Bold" })).toBeVisible();
+
+    await toolButton(page, "Move").click();
+
+    await expect(page.getByRole("button", { name: "Blue" })).toBeHidden();
+  });
+
+  test("gathers the rest of the chrome into one menu", async ({ page }) => {
+    await openBoard(page);
+    await page.getByRole("button", { name: "More" }).click();
+
+    await expect(
+      page.getByRole("button", { name: "Copy the link" }),
+    ).toBeVisible();
+    await expect(page.getByLabel("Your name")).toBeVisible();
+
+    await page.getByRole("button", { name: "Clear the board" }).click();
+
+    await expect(page.getByText("Board cleared for everyone")).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Copy the link" }),
+    ).toBeHidden();
   });
 });

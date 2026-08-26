@@ -44,6 +44,9 @@ export const WIDTHS: { name: string; value: number }[] = [
   { name: "Bold", value: 8 },
 ];
 
+/** The board starts on a width the dock can show as chosen, so one of the three is. */
+export const MEDIUM_WIDTH = 4;
+
 export const SHAPES: { id: ShapeId; name: string }[] = [
   { id: "rect", name: "Rectangle" },
   { id: "ellipse", name: "Ellipse" },

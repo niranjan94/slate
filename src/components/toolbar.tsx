@@ -8,12 +8,24 @@ import { PhonePanel } from "./phone-panel";
 const TOOL_BUTTON =
   "cursor-pointer rounded-[10px] px-[13px] py-[9px] text-[13.5px] font-medium transition-colors";
 
+/** A thumb needs about this much of a target, whatever the label inside it is. */
+const THUMB = "min-h-11 min-w-11";
+
+const DOCK_SHELL =
+  "absolute rounded-[15px] border border-line bg-panel shadow-dock";
+
+const ROW_SHELL =
+  "absolute flex items-center justify-center rounded-xl border border-line bg-panel shadow-panel";
+
 type ToolbarProps = {
   tool: ToolId;
   shape: ShapeId;
   color: string;
   width: number;
   zoomLabel: string;
+  /** Below the width the full dock needs, so the dock carries the tools alone. */
+  narrow: boolean;
+  coarse: boolean;
   /** Non-null exactly while the phone panel is open, so one prop carries the gate and the contents. */
   phone: CompanionState | null;
   onSelectTool: (tool: ToolId) => void;
@@ -29,12 +41,87 @@ type ToolbarProps = {
   onZoomReset: () => void;
 };
 
+function Swatch({
+  swatch,
+  selected,
+  size,
+}: {
+  swatch: { name: string; value: string };
+  selected: boolean;
+  size: number;
+}) {
+  return (
+    <span
+      className="block rounded-full"
+      style={{
+        width: `${size}px`,
+        height: `${size}px`,
+        background: swatch.value,
+        border: selected ? "2px solid #fff" : "2px solid transparent",
+        boxShadow: selected
+          ? `0 0 0 2px ${swatch.value}`
+          : "0 0 0 1px rgb(28 27 25 / 0.12)",
+      }}
+    />
+  );
+}
+
+/** The colours and the nib, which the narrow dock has no room to keep beside the tools. */
+function StyleRow({
+  color,
+  width,
+  onSelectColor,
+  onSelectWidth,
+}: Pick<ToolbarProps, "color" | "width" | "onSelectColor" | "onSelectWidth">) {
+  return (
+    <div
+      className={`${ROW_SHELL} inset-x-3 bottom-[calc(76px+var(--safe-b))] gap-0.5 p-1.5`}
+    >
+      {SWATCHES.map((swatch) => (
+        <button
+          key={swatch.name}
+          type="button"
+          aria-label={swatch.name}
+          onClick={() => onSelectColor(swatch.value)}
+          className={`${THUMB} flex flex-1 cursor-pointer items-center justify-center rounded-[10px]`}
+        >
+          <Swatch swatch={swatch} selected={color === swatch.value} size={22} />
+        </button>
+      ))}
+
+      <div className="mx-1 h-6 w-px bg-rule" />
+
+      {WIDTHS.map((option) => (
+        <button
+          key={option.name}
+          type="button"
+          aria-label={option.name}
+          onClick={() => onSelectWidth(option.value)}
+          className={`${THUMB} flex flex-1 cursor-pointer items-center justify-center rounded-[10px] transition-colors ${
+            width === option.value ? "bg-active" : ""
+          }`}
+        >
+          <span
+            className="block rounded-full bg-ink"
+            style={{
+              width: `${option.value + 3}px`,
+              height: `${option.value + 3}px`,
+            }}
+          />
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function Toolbar({
   tool,
   shape,
   color,
   width,
   zoomLabel,
+  narrow,
+  coarse,
   phone,
   onSelectTool,
   onSelectShape,
@@ -48,6 +135,69 @@ export function Toolbar({
   onZoomOut,
   onZoomReset,
 }: ToolbarProps) {
+  const inks = tool === "pen" || tool === "eraser" || tool === "shape";
+
+  const shapeRow = (
+    <div
+      className={`${ROW_SHELL} left-1/2 -translate-x-1/2 gap-[3px] p-1.5 ${
+        narrow
+          ? "bottom-[calc(140px+var(--safe-b))]"
+          : "bottom-[calc(118px+var(--safe-b))]"
+      }`}
+    >
+      {SHAPES.map((option) => (
+        <button
+          key={option.id}
+          type="button"
+          onClick={() => onSelectShape(option.id)}
+          className={`cursor-pointer rounded-lg px-3 text-[13px] font-medium transition-colors ${
+            coarse ? "min-h-11" : "py-[7px]"
+          } ${
+            shape === option.id
+              ? "bg-active text-ink"
+              : "text-ink-muted hover:bg-hover"
+          }`}
+        >
+          {option.name}
+        </button>
+      ))}
+    </div>
+  );
+
+  if (narrow) {
+    return (
+      <>
+        {tool === "shape" && shapeRow}
+        {inks && (
+          <StyleRow
+            color={color}
+            width={width}
+            onSelectColor={onSelectColor}
+            onSelectWidth={onSelectWidth}
+          />
+        )}
+
+        <div
+          className={`${DOCK_SHELL} inset-x-3 bottom-[calc(12px+var(--safe-b))] flex items-center gap-0.5 p-1.5`}
+        >
+          {TOOLS.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              aria-label={option.label}
+              onClick={() => onSelectTool(option.id)}
+              className={`${THUMB} flex-1 cursor-pointer rounded-[10px] px-1 text-[13px] font-medium transition-colors ${
+                tool === option.id ? "bg-ink text-ink-invert" : "text-ink-soft"
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
       {phone ? (
@@ -58,27 +208,12 @@ export function Toolbar({
           onClose={onTogglePhone}
         />
       ) : (
-        tool === "shape" && (
-          <div className="absolute bottom-[calc(118px+var(--safe-b))] left-1/2 flex -translate-x-1/2 items-center gap-[3px] rounded-xl border border-line bg-panel p-1.5 shadow-panel">
-            {SHAPES.map((option) => (
-              <button
-                key={option.id}
-                type="button"
-                onClick={() => onSelectShape(option.id)}
-                className={`cursor-pointer rounded-lg px-3 py-[7px] text-[13px] font-medium transition-colors ${
-                  shape === option.id
-                    ? "bg-active text-ink"
-                    : "text-ink-muted hover:bg-hover"
-                }`}
-              >
-                {option.name}
-              </button>
-            ))}
-          </div>
-        )
+        tool === "shape" && shapeRow
       )}
 
-      <div className="absolute bottom-[calc(22px+var(--safe-b))] left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-[15px] border border-line bg-panel p-2 shadow-dock">
+      <div
+        className={`${DOCK_SHELL} bottom-[calc(22px+var(--safe-b))] left-1/2 flex -translate-x-1/2 items-center gap-1.5 p-2`}
+      >
         <div className="flex items-center gap-0.5">
           {TOOLS.map((option) => (
             <button
@@ -86,7 +221,7 @@ export function Toolbar({
               type="button"
               title={option.hint}
               onClick={() => onSelectTool(option.id)}
-              className={`${TOOL_BUTTON} ${
+              className={`${TOOL_BUTTON} ${coarse ? THUMB : ""} ${
                 tool === option.id
                   ? "bg-ink text-ink-invert"
                   : "text-ink-soft hover:bg-hover"
@@ -99,7 +234,7 @@ export function Toolbar({
             type="button"
             title="add a picture"
             onClick={onPickImage}
-            className={`${TOOL_BUTTON} text-ink-soft hover:bg-hover`}
+            className={`${TOOL_BUTTON} ${coarse ? THUMB : ""} text-ink-soft hover:bg-hover`}
           >
             Image
           </button>
@@ -108,7 +243,7 @@ export function Toolbar({
             title="send a photo from your phone"
             aria-pressed={phone !== null}
             onClick={onTogglePhone}
-            className={`${TOOL_BUTTON} ${
+            className={`${TOOL_BUTTON} ${coarse ? THUMB : ""} ${
               phone ? "bg-active text-ink" : "text-ink-soft hover:bg-hover"
             }`}
           >
@@ -126,19 +261,16 @@ export function Toolbar({
               title={swatch.name}
               aria-label={swatch.name}
               onClick={() => onSelectColor(swatch.value)}
-              className="size-[19px] cursor-pointer rounded-full p-0"
-              style={{
-                background: swatch.value,
-                border:
-                  color === swatch.value
-                    ? "2px solid #fff"
-                    : "2px solid transparent",
-                boxShadow:
-                  color === swatch.value
-                    ? `0 0 0 2px ${swatch.value}`
-                    : "0 0 0 1px rgb(28 27 25 / 0.12)",
-              }}
-            />
+              className={`flex cursor-pointer items-center justify-center rounded-full p-0 ${
+                coarse ? THUMB : "size-[19px]"
+              }`}
+            >
+              <Swatch
+                swatch={swatch}
+                selected={color === swatch.value}
+                size={19}
+              />
+            </button>
           ))}
         </div>
 
@@ -152,9 +284,9 @@ export function Toolbar({
               title={option.name}
               aria-label={option.name}
               onClick={() => onSelectWidth(option.value)}
-              className={`flex size-7 cursor-pointer items-center justify-center rounded-lg transition-colors ${
-                width === option.value ? "bg-active" : "hover:bg-hover"
-              }`}
+              className={`flex cursor-pointer items-center justify-center rounded-lg transition-colors ${
+                coarse ? THUMB : "size-7"
+              } ${width === option.value ? "bg-active" : "hover:bg-hover"}`}
             >
               <span
                 className="block rounded-full bg-ink"
@@ -174,7 +306,9 @@ export function Toolbar({
             type="button"
             title="Zoom out"
             onClick={onZoomOut}
-            className="size-7 cursor-pointer rounded-lg text-base text-ink-soft transition-colors hover:bg-hover"
+            className={`cursor-pointer rounded-lg text-base text-ink-soft transition-colors hover:bg-hover ${
+              coarse ? THUMB : "size-7"
+            }`}
           >
             &#8722;
           </button>
@@ -182,7 +316,9 @@ export function Toolbar({
             type="button"
             title="Reset view"
             onClick={onZoomReset}
-            className="h-7 min-w-[46px] cursor-pointer rounded-lg text-[12.5px] font-medium text-ink-soft transition-colors hover:bg-hover"
+            className={`min-w-[46px] cursor-pointer rounded-lg text-[12.5px] font-medium text-ink-soft transition-colors hover:bg-hover ${
+              coarse ? "min-h-11" : "h-7"
+            }`}
           >
             {zoomLabel}
           </button>
@@ -190,7 +326,9 @@ export function Toolbar({
             type="button"
             title="Zoom in"
             onClick={onZoomIn}
-            className="size-7 cursor-pointer rounded-lg text-base text-ink-soft transition-colors hover:bg-hover"
+            className={`cursor-pointer rounded-lg text-base text-ink-soft transition-colors hover:bg-hover ${
+              coarse ? THUMB : "size-7"
+            }`}
           >
             +
           </button>

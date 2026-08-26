@@ -43,12 +43,19 @@ import {
 import { paintBoard, resizeCanvas, type Viewport } from "@/lib/paint";
 import type { LinkStatus } from "@/lib/peer-link";
 import { displayNameFor, inviteUrl } from "@/lib/room";
-import { eraserSize, shortcutToTool, TOOL_STATUS } from "@/lib/tools";
+import { useCoarsePointer, useNarrowScreen } from "@/lib/screen";
+import {
+  eraserSize,
+  MEDIUM_WIDTH,
+  shortcutToTool,
+  TOOL_STATUS,
+} from "@/lib/tools";
 import {
   type BoardRoom,
   type PeerPresence,
   useAuthorNames,
 } from "@/lib/use-board-room";
+import { BoardMenu } from "./board-menu";
 import { NameChip } from "./name-field";
 import { PeerCursors } from "./peer-cursors";
 import { RoomGate } from "./room-gate";
@@ -146,7 +153,7 @@ export function Board({
   const [tool, setTool] = useState<ToolId>("pen");
   const [shape, setShape] = useState<ShapeId>("rect");
   const [color, setColor] = useState("#1c1b19");
-  const [width, setWidth] = useState(3);
+  const [width, setWidth] = useState(MEDIUM_WIDTH);
   const [view, setView] = useState<Viewport>(HOME_VIEW);
   const [elements, setElements] = useState<BoardElement[]>([]);
   const [toast, setToast] = useState("");
@@ -155,7 +162,11 @@ export function Board({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [phoneOpen, setPhoneOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [companion, setCompanion] = useState<CompanionState | null>(null);
+
+  const narrow = useNarrowScreen();
+  const coarse = useCoarsePointer();
 
   const surfaceRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -361,6 +372,12 @@ export function Board({
   }, [undoManager, showToast]);
 
   const pickImage = useCallback(() => fileInputRef.current?.click(), []);
+
+  const clearAll = useCallback(() => {
+    clearBoard(doc);
+    undoManager.stopCapturing();
+    showToast("Board cleared for everyone");
+  }, [doc, undoManager, showToast]);
 
   const addImages = useCallback(
     async (files: File[], worldX: number, worldY: number) => {
@@ -1177,85 +1194,162 @@ export function Board({
         />
       </div>
 
-      <div className="absolute top-[calc(18px+var(--safe-t))] left-[calc(18px+var(--safe-l))] flex items-center gap-2.5">
-        <div className="flex items-center gap-3 rounded-xl border border-line bg-panel px-3.5 py-[9px] shadow-panel">
-          <span className="text-base font-semibold tracking-[-0.01em]">
-            slate
-          </span>
-          <div className="h-4 w-px bg-rule" />
-          <span className="text-[13px] font-medium tracking-[0.12em] text-ink-muted">
-            {code}
-          </span>
+      {narrow ? (
+        <>
+          <div className="absolute top-[calc(12px+var(--safe-t))] left-[calc(12px+var(--safe-l))] flex items-center gap-2.5 rounded-xl border border-line bg-panel px-3 py-2 shadow-panel">
+            <span className="text-[15px] font-semibold tracking-[-0.01em]">
+              slate
+            </span>
+            <div className="h-3.5 w-px bg-rule" />
+            <span className="text-[12px] font-medium tracking-[0.12em] text-ink-muted">
+              {code}
+            </span>
+            <div
+              className="size-2 rounded-full"
+              title={peerLabel(status, peers)}
+              style={{
+                background:
+                  status === "connected" ? "oklch(0.62 0.19 25)" : "#cfcdc6",
+              }}
+            />
+          </div>
+
           <button
             type="button"
-            onClick={copyInvite}
-            className="cursor-pointer rounded-[7px] border border-line-strong bg-raised px-[9px] py-[5px] text-xs font-medium text-ink-soft transition-colors hover:bg-active"
+            title="Reset view"
+            onClick={() => setView(HOME_VIEW)}
+            className="absolute top-[calc(60px+var(--safe-t))] left-[calc(12px+var(--safe-l))] min-h-9 cursor-pointer rounded-[10px] border border-line bg-panel px-2.5 text-[12px] font-medium text-ink-soft shadow-panel"
           >
-            Copy link
+            {`${Math.round(view.zoom * 100)}%`}
           </button>
-        </div>
 
-        <div
-          className="flex items-center gap-2 rounded-xl border border-line bg-panel px-3.5 py-[9px] shadow-panel"
-          style={{ color: status === "connected" ? "#1c1b19" : "#8a8880" }}
-        >
-          <div
-            className="size-2 rounded-full"
-            style={{
-              background:
-                status === "connected" ? "oklch(0.62 0.19 25)" : "#cfcdc6",
-            }}
-          />
-          <span className="text-[13px] font-medium">
-            {peerLabel(status, peers)}
-          </span>
-        </div>
+          <div className="absolute top-[calc(12px+var(--safe-t))] right-[calc(12px+var(--safe-r))] flex items-center gap-0.5 rounded-xl border border-line bg-panel p-1 shadow-panel">
+            <button
+              type="button"
+              aria-label="Undo"
+              onClick={undo}
+              className="size-10 cursor-pointer rounded-[10px] text-[17px] text-ink-soft"
+            >
+              &#8617;
+            </button>
+            <button
+              type="button"
+              aria-label="Redo"
+              onClick={redo}
+              className="size-10 cursor-pointer rounded-[10px] text-[17px] text-ink-soft"
+            >
+              &#8618;
+            </button>
+            <button
+              type="button"
+              aria-label="More"
+              aria-pressed={menuOpen}
+              onClick={() => setMenuOpen((open) => !open)}
+              className={`size-10 cursor-pointer rounded-[10px] text-[17px] leading-none ${
+                menuOpen ? "bg-active text-ink" : "text-ink-soft"
+              }`}
+            >
+              &#8943;
+            </button>
+          </div>
 
-        <NameChip name={localName} onRename={onRename} />
-      </div>
+          {menuOpen && (
+            <BoardMenu
+              localName={localName}
+              onRename={onRename}
+              onCopy={copyInvite}
+              onPickImage={pickImage}
+              onClear={clearAll}
+              onShowHelp={() => setSheetOpen(true)}
+              onClose={() => setMenuOpen(false)}
+            />
+          )}
+        </>
+      ) : (
+        <>
+          <div className="absolute top-[calc(18px+var(--safe-t))] left-[calc(18px+var(--safe-l))] flex items-center gap-2.5">
+            <div className="flex items-center gap-3 rounded-xl border border-line bg-panel px-3.5 py-[9px] shadow-panel">
+              <span className="text-base font-semibold tracking-[-0.01em]">
+                slate
+              </span>
+              <div className="h-4 w-px bg-rule" />
+              <span className="text-[13px] font-medium tracking-[0.12em] text-ink-muted">
+                {code}
+              </span>
+              <button
+                type="button"
+                onClick={copyInvite}
+                className="cursor-pointer rounded-[7px] border border-line-strong bg-raised px-[9px] py-[5px] text-xs font-medium text-ink-soft transition-colors hover:bg-active"
+              >
+                Copy link
+              </button>
+            </div>
 
-      <div className="absolute top-[calc(18px+var(--safe-t))] right-[calc(18px+var(--safe-r))] flex items-center gap-1 rounded-xl border border-line bg-panel p-[7px] shadow-panel">
-        <button
-          type="button"
-          title="Undo · ⌘Z"
-          onClick={undo}
-          className="cursor-pointer rounded-lg px-3 py-2 text-[13.5px] font-medium text-ink-soft transition-colors hover:bg-hover"
-        >
-          Undo
-        </button>
-        <button
-          type="button"
-          title="Redo · ⇧⌘Z"
-          onClick={redo}
-          className="cursor-pointer rounded-lg px-3 py-2 text-[13.5px] font-medium text-ink-soft transition-colors hover:bg-hover"
-        >
-          Redo
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            clearBoard(doc);
-            undoManager.stopCapturing();
-            showToast("Board cleared for everyone");
-          }}
-          className="cursor-pointer rounded-lg px-3 py-2 text-[13.5px] font-medium text-ink-ghost transition-colors hover:bg-hover hover:text-peer"
-        >
-          Clear
-        </button>
-        <div className="mx-0.5 h-[22px] w-px bg-rule" />
-        <button
-          type="button"
-          title="Keyboard shortcuts · ?"
-          aria-label="Keyboard shortcuts"
-          aria-pressed={sheetOpen}
-          onClick={() => setSheetOpen((open) => !open)}
-          className={`size-9 cursor-pointer rounded-lg text-[13.5px] font-medium transition-colors ${
-            sheetOpen ? "bg-active text-ink" : "text-ink-soft hover:bg-hover"
-          }`}
-        >
-          ?
-        </button>
-      </div>
+            <div
+              className="flex items-center gap-2 rounded-xl border border-line bg-panel px-3.5 py-[9px] shadow-panel"
+              style={{ color: status === "connected" ? "#1c1b19" : "#8a8880" }}
+            >
+              <div
+                className="size-2 rounded-full"
+                style={{
+                  background:
+                    status === "connected" ? "oklch(0.62 0.19 25)" : "#cfcdc6",
+                }}
+              />
+              <span className="text-[13px] font-medium">
+                {peerLabel(status, peers)}
+              </span>
+            </div>
+
+            <NameChip name={localName} onRename={onRename} />
+          </div>
+
+          <div className="absolute top-[calc(18px+var(--safe-t))] right-[calc(18px+var(--safe-r))] flex items-center gap-1 rounded-xl border border-line bg-panel p-[7px] shadow-panel">
+            <button
+              type="button"
+              title="Undo \u00b7 \u2318Z"
+              onClick={undo}
+              className={`cursor-pointer rounded-lg px-3 py-2 text-[13.5px] font-medium text-ink-soft transition-colors hover:bg-hover ${
+                coarse ? "min-h-11" : ""
+              }`}
+            >
+              Undo
+            </button>
+            <button
+              type="button"
+              title="Redo \u00b7 \u21e7\u2318Z"
+              onClick={redo}
+              className={`cursor-pointer rounded-lg px-3 py-2 text-[13.5px] font-medium text-ink-soft transition-colors hover:bg-hover ${
+                coarse ? "min-h-11" : ""
+              }`}
+            >
+              Redo
+            </button>
+            <button
+              type="button"
+              onClick={clearAll}
+              className={`cursor-pointer rounded-lg px-3 py-2 text-[13.5px] font-medium text-ink-ghost transition-colors hover:bg-hover hover:text-peer ${
+                coarse ? "min-h-11" : ""
+              }`}
+            >
+              Clear
+            </button>
+            <div className="mx-0.5 h-[22px] w-px bg-rule" />
+            <button
+              type="button"
+              title="Keyboard shortcuts \u00b7 ?"
+              aria-label="Keyboard shortcuts"
+              aria-pressed={sheetOpen}
+              onClick={() => setSheetOpen((open) => !open)}
+              className={`cursor-pointer rounded-lg text-[13.5px] font-medium transition-colors ${
+                coarse ? "size-11" : "size-9"
+              } ${sheetOpen ? "bg-active text-ink" : "text-ink-soft hover:bg-hover"}`}
+            >
+              ?
+            </button>
+          </div>
+        </>
+      )}
 
       <Toolbar
         tool={tool}
@@ -1263,6 +1357,8 @@ export function Board({
         color={color}
         width={width}
         zoomLabel={`${Math.round(view.zoom * 100)}%`}
+        narrow={narrow}
+        coarse={coarse}
         onSelectTool={setTool}
         onSelectShape={(next) => {
           setShape(next);
@@ -1283,12 +1379,20 @@ export function Board({
         onZoomReset={() => setView(HOME_VIEW)}
       />
 
-      <div className="pointer-events-none absolute bottom-[calc(88px+var(--safe-b))] left-1/2 -translate-x-1/2 text-[11.5px] leading-[1.5] tracking-[0.01em] whitespace-nowrap text-ink-ghost">
-        {TOOL_STATUS[tool]}
-      </div>
+      {!narrow && (
+        <div className="pointer-events-none absolute bottom-[calc(88px+var(--safe-b))] left-1/2 -translate-x-1/2 text-[11.5px] leading-[1.5] tracking-[0.01em] whitespace-nowrap text-ink-ghost">
+          {TOOL_STATUS[tool]}
+        </div>
+      )}
 
       {status === "reconnecting" && (
-        <div className="absolute top-[calc(74px+var(--safe-t))] left-1/2 flex -translate-x-1/2 items-center gap-2.5 rounded-[11px] bg-ink px-[15px] py-[9px] text-[13px] text-ink-invert shadow-notice">
+        <div
+          className={`absolute left-1/2 flex -translate-x-1/2 items-center gap-2.5 rounded-[11px] bg-ink px-[15px] py-[9px] text-[13px] text-ink-invert shadow-notice ${
+            narrow
+              ? "top-[calc(106px+var(--safe-t))]"
+              : "top-[calc(74px+var(--safe-t))]"
+          }`}
+        >
           <div className="size-[7px] rounded-full bg-amber" />
           <span>Lost the connection · reconnecting</span>
         </div>
@@ -1298,8 +1402,12 @@ export function Board({
         <div
           className={`pointer-events-none absolute left-1/2 -translate-x-1/2 animate-toast-in rounded-[10px] bg-ink px-4 py-[9px] text-[13px] text-ink-invert ${
             status === "reconnecting"
-              ? "top-[calc(126px+var(--safe-t))]"
-              : "top-[calc(74px+var(--safe-t))]"
+              ? narrow
+                ? "top-[calc(158px+var(--safe-t))]"
+                : "top-[calc(126px+var(--safe-t))]"
+              : narrow
+                ? "top-[calc(106px+var(--safe-t))]"
+                : "top-[calc(74px+var(--safe-t))]"
           }`}
         >
           {toast}
