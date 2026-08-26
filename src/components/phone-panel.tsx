@@ -11,11 +11,11 @@ type PhonePanelProps = {
 };
 
 function statusLine(state: CompanionState): string {
-  if (state.status === "error") return "Could not open a pairing link";
+  if (state.status === "error") return "Could not create a link just now";
   if (!state.url) return "Opening the link…";
   if (state.phones === 1) return "One phone connected";
   if (state.phones > 1) return `${state.phones} phones connected`;
-  return "Scan it to send photos here";
+  return "Scan this with your phone";
 }
 
 export function PhonePanel({
@@ -30,7 +30,8 @@ export function PhonePanel({
         Add from your phone
       </div>
       <p className="mb-3.5 text-[13px] leading-[1.5] text-ink-muted">
-        A photo you take lands on this board. Your phone does not join it.
+        Take a photo on your phone and it appears on this board. Your phone does
+        not join the board itself.
       </p>
 
       <div className="flex justify-center rounded-[10px] border border-line-strong border-dashed p-3">
@@ -70,12 +71,12 @@ export function PhonePanel({
         </button>
         <button
           type="button"
-          title="Retire this link and make a new one"
+          title="Stop the old link working and make a new one"
           onClick={onRevoke}
           disabled={!state.url}
           className="cursor-pointer rounded-[10px] border border-line-strong bg-raised px-3 py-[9px] text-[13px] font-medium transition-colors hover:bg-active disabled:cursor-default disabled:text-ink-ghost"
         >
-          Revoke
+          New link
         </button>
         <button
           type="button"

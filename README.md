@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/niranjan94/slate/actions/workflows/ci.yml/badge.svg)](https://github.com/niranjan94/slate/actions/workflows/ci.yml)
 
-A shared whiteboard for two, in the browser. Draw, erase, place text and drop in
+A shared whiteboard in the browser. Draw, erase, place text and drop in
 pictures; everything you do appears on the other person's board as you do it.
 Photograph something on your desk and it lands on the board, by pairing a phone
 to the tab you have open.
@@ -101,7 +101,7 @@ The phone does not join the board. Boards still hold two, and a phone is paired
 to one tab rather than to the room, so both people can pair their own. What it
 dials is a second peer the tab registers under a random 96 bit nonce, alongside
 the room slot and unaffected by it. The nonce is the whole of the authorisation:
-anyone holding the link can put photos on that board until you press Revoke,
+anyone holding the link can put photos on that board until you press New link,
 which retires the link and issues a new one. It is a stronger secret than the
 room code, which is five characters and already lets someone draw.
 
@@ -128,7 +128,7 @@ two tabs of the same browser and most connections between different networks.
 
 STUN is not always enough. Two different browser engines on one machine, and
 strict or symmetric NATs, cannot open a direct path at all. Those cases need a
-TURN relay, and without one the board sits on "waiting for someone to join".
+TURN relay, and without one the board sits on "waiting for the other person".
 
 There is no usable credential-free public TURN service, so a relay means
 bringing your own: a TURN add-on from Cloudflare, Metered, Twilio or similar, or

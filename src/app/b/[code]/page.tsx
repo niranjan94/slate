@@ -11,7 +11,7 @@ export async function generateMetadata({
   return {
     title: isValidRoomCode(normalized) ? `Board ${normalized}` : "Board",
     description:
-      "A shared whiteboard for two, open in your browser. Boards live only in the two browsers drawing on them.",
+      "A whiteboard you share, open in your browser. Your board stays in the browsers drawing on it.",
     robots: { index: false, follow: false },
   };
 }

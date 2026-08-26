@@ -6,7 +6,7 @@ import { isValidCompanionNonce } from "@/lib/companion";
 export const metadata: Metadata = {
   title: "Send a photo",
   description:
-    "Send a photo from this phone to a slate board that is already open on another screen.",
+    "Send a photo from this phone to a slate board open on another screen.",
   robots: { index: false, follow: false },
 };
 

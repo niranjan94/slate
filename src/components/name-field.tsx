@@ -107,7 +107,7 @@ export function NameInput({ name, onRename }: NameProps) {
           if (event.key === "Enter") commit();
         }}
         maxLength={MAX_NAME_LENGTH}
-        placeholder="Who are you?"
+        placeholder="Type your name"
         className={`${INPUT_BASE} w-full px-4 py-[13px] text-[15px] font-medium`}
       />
     </label>

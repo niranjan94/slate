@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { createBoard, dismissGate } from "./support/board";
 
 const nameField = (page: Parameters<typeof createBoard>[0]) =>
-  page.getByPlaceholder("Who are you?");
+  page.getByPlaceholder("Type your name");
 
 /** The rename control in the board chrome, which is a button until it is clicked. */
 const youChip = (page: Parameters<typeof createBoard>[0]) =>
@@ -17,7 +17,7 @@ test.describe("naming yourself", () => {
     await createBoard(page);
   });
 
-  test("the entry panel asks who you are", async ({ page }) => {
+  test("the entry panel asks for your name", async ({ page }) => {
     await expect(nameField(page)).toBeVisible();
   });
 

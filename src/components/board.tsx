@@ -124,9 +124,9 @@ function snapAngle(degrees: number, stepped: boolean): number {
 function peerLabel(status: LinkStatus, peers: PeerPresence[]): string {
   if (status === "connected" && peers.length > 0) return peers[0].name;
   if (status === "full") return "board full";
-  if (status === "error") return "offline";
+  if (status === "error") return "no connection";
   if (status === "reconnecting") return "reconnecting";
-  return "waiting";
+  return "just you";
 }
 
 export function Board({
@@ -361,13 +361,13 @@ export function Board({
           );
           undoManager.stopCapturing();
         } catch {
-          showToast("That image could not be read");
+          showToast("That image would not open");
         }
       }
       if (placed) {
         setTool("select");
         setSelectedId(placed);
-        showToast("Drag to move · corner resizes · ⌫ removes");
+        showToast("Drag to move · corner resizes · Backspace removes");
       }
     },
     [doc, localClientId, undoManager, showToast],
@@ -821,7 +821,7 @@ export function Board({
       event.preventDefault();
       const files = imageFilesFrom(event.dataTransfer?.files);
       if (files.length === 0) {
-        showToast("Drop an image file");
+        showToast("That file is not an image");
         return;
       }
       const [x, y] = toWorld(event.clientX, event.clientY);
@@ -1120,7 +1120,7 @@ export function Board({
           onClick={() => {
             clearBoard(doc);
             undoManager.stopCapturing();
-            showToast("Board cleared for both of you");
+            showToast("Board cleared for everyone");
           }}
           className="cursor-pointer rounded-lg px-3 py-2 text-[13.5px] font-medium text-ink-ghost transition-colors hover:bg-hover hover:text-peer"
         >
@@ -1174,7 +1174,7 @@ export function Board({
       {status === "reconnecting" && (
         <div className="absolute top-[74px] left-1/2 flex -translate-x-1/2 items-center gap-2.5 rounded-[11px] bg-ink px-[15px] py-[9px] text-[13px] text-ink-invert shadow-notice">
           <div className="size-[7px] rounded-full bg-amber" />
-          <span>Peer disconnected · trying to reconnect</span>
+          <span>Lost the connection · reconnecting</span>
         </div>
       )}
 

@@ -7,7 +7,11 @@ export const alt = `${SITE_NAME}, ${SITE_TAGLINE.toLowerCase()}`;
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
-const NOTES = ["Peer-to-peer over WebRTC", "No accounts", "Boards hold two"];
+const NOTES = [
+  "No sign-up",
+  "Stays in your browser",
+  "Peer-to-peer over WebRTC",
+];
 
 export default async function OpengraphImage() {
   const fonts = await loadOutfit([400, 600]);
@@ -66,7 +70,7 @@ export default async function OpengraphImage() {
             color: brand.inkMuted,
           }}
         >
-          {`${SITE_TAGLINE}. Draw together in real time over a direct browser-to-browser connection.`}
+          {`${SITE_TAGLINE}. Send a link and you are drawing on the same board, live.`}
         </div>
 
         <div style={{ display: "flex", gap: 14, marginTop: 46 }}>

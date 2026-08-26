@@ -23,17 +23,17 @@ test.describe("lobby", () => {
   });
 
   test("refuses a code that is too short", async ({ page }) => {
-    await page.getByLabel("Room code").fill("AB");
-    await page.getByRole("button", { name: "Connect" }).click();
+    await page.getByLabel("Board code").fill("AB");
+    await page.getByRole("button", { name: "Join" }).click();
 
-    await expect(page.getByText("Room codes are 5 characters")).toBeVisible();
+    await expect(page.getByText("Board codes are 5 characters")).toBeVisible();
     await expect(page).toHaveURL("/");
   });
 
   test("uppercases a code as it is typed", async ({ page }) => {
-    await page.getByLabel("Room code").fill("qw3rt");
+    await page.getByLabel("Board code").fill("qw3rt");
 
-    await expect(page.getByLabel("Room code")).toHaveValue("QW3RT");
+    await expect(page.getByLabel("Board code")).toHaveValue("QW3RT");
   });
 
   test("starting a board routes to it", async ({ page }) => {
@@ -46,8 +46,8 @@ test.describe("lobby", () => {
     const code = await createBoard(page);
 
     await page.goto("/");
-    await page.getByLabel("Room code").fill(code.toLowerCase());
-    await page.getByRole("button", { name: "Connect" }).click();
+    await page.getByLabel("Board code").fill(code.toLowerCase());
+    await page.getByRole("button", { name: "Join" }).click();
 
     await expect(page).toHaveURL(`/b/${code}`);
   });

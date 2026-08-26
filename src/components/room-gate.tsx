@@ -43,8 +43,8 @@ export function RoomGate({
     return (
       <Shell>
         <p className="mt-2.5 mb-6 max-w-[34ch] text-[14.5px] leading-[1.55] text-ink-muted text-pretty">
-          Board <span className="font-medium text-ink">{code}</span> already has
-          two people on it. Boards hold two.
+          Board <span className="font-medium text-ink">{code}</span> is already
+          full.
         </p>
         <Link
           href="/"
@@ -60,8 +60,8 @@ export function RoomGate({
     return (
       <Shell>
         <p className="mt-2.5 mb-6 max-w-[34ch] text-[14.5px] leading-[1.55] text-ink-muted text-pretty">
-          Could not reach the signalling broker, so the two browsers cannot find
-          each other. Your board is safe on this device.
+          We could not connect you just now. Your board is safe on this device,
+          so you can keep drawing and share it later.
         </p>
         <button
           type="button"
@@ -77,8 +77,8 @@ export function RoomGate({
   return (
     <Shell>
       <p className="mt-2.5 mb-[22px] max-w-[34ch] text-[14.5px] leading-[1.55] text-ink-muted text-pretty">
-        A shared whiteboard for two. Draw together in real time over a direct
-        browser-to-browser connection.
+        Share the link below and you will be drawing on this board together,
+        live.
       </p>
 
       <NameInput name={localName} onRename={onRename} />
@@ -90,15 +90,15 @@ export function RoomGate({
         </div>
         <span className="text-sm text-ink-muted">
           {status === "connecting"
-            ? "Opening the room…"
-            : "Waiting for someone to join…"}
+            ? "Setting up your board…"
+            : "Waiting for the other person…"}
         </span>
       </div>
 
       <div className="flex items-center justify-between gap-3.5 rounded-xl border border-line-strong border-dashed bg-field px-[18px] py-4">
         <div>
           <div className="mb-[5px] text-[10.5px] font-medium tracking-[0.1em] text-ink-ghost uppercase">
-            Room code
+            Board code
           </div>
           <div className="text-2xl font-medium tracking-[0.14em]">{code}</div>
         </div>
@@ -112,7 +112,7 @@ export function RoomGate({
       </div>
 
       <p className="mt-4 text-[13px] text-ink-faint">
-        Send the link or the code to one other person. Boards hold two.
+        Send the link or the code to whoever you want on the board.
       </p>
 
       <button

@@ -23,7 +23,7 @@ export function Lobby() {
   const join = useCallback(() => {
     const code = normalizeRoomCode(joinCode);
     if (!isValidRoomCode(code)) {
-      setError(`Room codes are ${ROOM_CODE_LENGTH} characters`);
+      setError(`Board codes are ${ROOM_CODE_LENGTH} characters`);
       return;
     }
     router.push(boardPath(code));
@@ -52,8 +52,8 @@ export function Lobby() {
         </div>
 
         <p className="mt-2.5 mb-[26px] max-w-[34ch] text-[14.5px] leading-[1.55] text-ink-muted text-pretty">
-          A shared whiteboard for two. Draw together in real time over a direct
-          browser-to-browser connection.
+          Start a board, send the link, and draw on it together. Sketch an idea,
+          plan something, explain a thing that is easier drawn than typed.
         </p>
 
         <div className="flex flex-col gap-3">
@@ -85,9 +85,9 @@ export function Lobby() {
               onKeyDown={(event) => {
                 if (event.key === "Enter") join();
               }}
-              placeholder="ROOM CODE"
+              placeholder="BOARD CODE"
               maxLength={ROOM_CODE_LENGTH}
-              aria-label="Room code"
+              aria-label="Board code"
               className="min-w-0 flex-1 rounded-xl border border-line-strong bg-field px-4 py-[14px] text-[15px] font-medium tracking-[0.2em] text-ink uppercase outline-none focus:border-accent focus:bg-white"
             />
             <button
@@ -95,7 +95,7 @@ export function Lobby() {
               onClick={join}
               className="cursor-pointer rounded-xl border border-line-strong bg-white px-5 py-[14px] text-[14.5px] font-medium text-ink transition-colors hover:bg-hover"
             >
-              Connect
+              Join
             </button>
           </div>
         </div>

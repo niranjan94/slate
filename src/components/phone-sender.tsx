@@ -53,7 +53,7 @@ const LINK_TEXT: Record<LinkState, string> = {
   ready: "Connected",
   waiting: "Reconnecting…",
   gone: "That link has expired. Scan the code again.",
-  error: "This browser cannot open the connection.",
+  error: "This browser cannot connect. Try Chrome or Safari.",
 };
 
 const INPUT_CLASS = "sr-only";
@@ -291,7 +291,8 @@ export function PhoneSender({ nonce }: { nonce: string }) {
       </div>
 
       <p className="mt-2.5 text-[14.5px] leading-[1.55] text-ink-muted text-pretty">
-        Photos you take here land on {target}. This phone is not drawing on it.
+        Photos you take here appear on {target}. You are only sending photos,
+        not drawing.
       </p>
 
       <div className="mt-4 mb-6 flex items-center gap-2.5">
@@ -305,7 +306,9 @@ export function PhoneSender({ nonce }: { nonce: string }) {
           }`}
         />
         <span className="text-sm text-ink-muted">
-          {stale ? "One side is out of date. Reload both." : LINK_TEXT[link]}
+          {stale
+            ? "Refresh both screens to get back in sync."
+            : LINK_TEXT[link]}
         </span>
       </div>
 

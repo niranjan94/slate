@@ -9,14 +9,14 @@ import { createBoard } from "./support/board";
 test("a new board claims its slot and waits for someone", async ({ page }) => {
   await createBoard(page);
 
-  await expect(page.getByText("Waiting for someone to join…")).toBeVisible({
+  await expect(page.getByText("Waiting for the other person…")).toBeVisible({
     timeout: 30_000,
   });
 });
 
 test("the room code is offered for sharing", async ({ page }) => {
   const code = await createBoard(page);
-  const panel = page.getByText("Room code").locator("../..");
+  const panel = page.getByText("Board code").locator("../..");
 
   await expect(panel.getByText(code, { exact: true })).toBeVisible();
   await expect(panel.getByRole("button", { name: "Copy link" })).toBeVisible();

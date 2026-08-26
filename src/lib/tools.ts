@@ -18,7 +18,7 @@ export const TOOLS: ToolDef[] = [
     hint: "move, rotate, resize · V",
     shortcut: "v",
   },
-  { id: "pan", label: "Pan", hint: "drag the board · H", shortcut: "h" },
+  { id: "pan", label: "Pan", hint: "drag to move around · H", shortcut: "h" },
 ];
 
 export const TOOL_STATUS: Record<ToolId, string> = {
@@ -26,8 +26,9 @@ export const TOOL_STATUS: Record<ToolId, string> = {
   eraser: "drag to erase ink",
   text: "click anywhere to place text",
   shape: "drag out a shape",
-  select: "drag to move · corner resizes · top handle rotates · ⌫ removes",
-  pan: "drag to move the board · ⌘ + scroll to zoom",
+  select:
+    "drag to move · corner resizes · top handle rotates · Backspace removes",
+  pan: "drag to move around · ⌘ + scroll to zoom",
 };
 
 export const SWATCHES: { name: string; value: string }[] = [

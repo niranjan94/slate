@@ -4,7 +4,7 @@ import { SITE_DESCRIPTION, SITE_NAME } from "@/lib/site";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: `${SITE_NAME}, a shared whiteboard for two`,
+    name: `${SITE_NAME}, a whiteboard you share`,
     short_name: SITE_NAME,
     description: SITE_DESCRIPTION,
     start_url: "/",
