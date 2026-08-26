@@ -40,3 +40,28 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
     ],
   },
 ];
+
+/**
+ * What the sheet shows on a touch screen, where none of the keys above exist. Kept
+ * beside them for the same reason: the sheet is documentation of the handlers.
+ */
+export const GESTURE_GROUPS: ShortcutGroup[] = [
+  {
+    title: "The board",
+    rows: [
+      { keys: "One finger", does: "Whatever tool you have in hand" },
+      { keys: "Two fingers", does: "Move around and zoom, in any tool" },
+      { keys: "The zoom", does: "Tap it to go back to 100%" },
+    ],
+  },
+  {
+    title: "Pictures and text",
+    rows: [
+      { keys: "Hold", does: "Pick up whatever is under your finger" },
+      { keys: "Drag", does: "Move what you have picked up" },
+      { keys: "Corner", does: "Resize a picture" },
+      { keys: "Top handle", does: "Turn it" },
+      { keys: "×", does: "Take it off the board" },
+    ],
+  },
+];

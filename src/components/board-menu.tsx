@@ -6,6 +6,10 @@ import { NameInput } from "./name-field";
 type BoardMenuProps = {
   localName: string;
   onRename: (name: string) => string;
+  /** Set on a touch screen, where the camera is at hand and pairing a phone is not. */
+  onTakePhoto: (() => void) | null;
+  /** Set where there is no camera, so a phone is still worth pairing to the board. */
+  onPairPhone: (() => void) | null;
   onCopy: () => void;
   onPickImage: () => void;
   onClear: () => void;
@@ -23,6 +27,8 @@ const ROW =
 export function BoardMenu({
   localName,
   onRename,
+  onTakePhoto,
+  onPairPhone,
   onCopy,
   onPickImage,
   onClear,
@@ -78,6 +84,30 @@ export function BoardMenu({
       >
         Add a picture
       </button>
+      {onTakePhoto && (
+        <button
+          type="button"
+          onClick={() => {
+            onTakePhoto();
+            onClose();
+          }}
+          className={`${ROW} text-ink`}
+        >
+          Take a photo
+        </button>
+      )}
+      {onPairPhone && (
+        <button
+          type="button"
+          onClick={() => {
+            onPairPhone();
+            onClose();
+          }}
+          className={`${ROW} text-ink`}
+        >
+          Add from your phone
+        </button>
+      )}
       <button
         type="button"
         onClick={() => {

@@ -228,6 +228,7 @@ export function Board({
   const surfaceRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const strokesRef = useRef<Stroke[]>([]);
   // Keys act on the element in hand without the handler resubscribing on every drag.
@@ -441,6 +442,7 @@ export function Board({
   }, [undoManager, showToast]);
 
   const pickImage = useCallback(() => fileInputRef.current?.click(), []);
+  const takePhoto = useCallback(() => cameraInputRef.current?.click(), []);
 
   const clearAll = useCallback(() => {
     clearBoard(doc);
@@ -1099,6 +1101,19 @@ export function Board({
     }
   }, [code, showToast]);
 
+  const onFilesPicked = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const files = imageFilesFrom(event.target.files);
+      event.target.value = "";
+      if (files.length === 0) return;
+      // A fixed corner puts a picture off the side of a phone, so it lands where
+      // the board is being looked at, as a dropped one does.
+      const [centreX, centreY] = viewportCentre();
+      void addImages(files, centreX - 140, centreY - 100);
+    },
+    [addImages, viewportCentre],
+  );
+
   const onDrop = useCallback(
     (event: React.DragEvent<HTMLDivElement>) => {
       event.preventDefault();
@@ -1410,6 +1425,8 @@ export function Board({
               onRename={onRename}
               onCopy={copyInvite}
               onPickImage={pickImage}
+              onTakePhoto={coarse ? takePhoto : null}
+              onPairPhone={coarse ? null : togglePhone}
               onClear={clearAll}
               onShowHelp={() => setSheetOpen(true)}
               onClose={() => setMenuOpen(false)}
@@ -1571,15 +1588,16 @@ export function Board({
         accept="image/*"
         multiple
         className="hidden"
-        onChange={(event) => {
-          const files = imageFilesFrom(event.target.files);
-          event.target.value = "";
-          if (files.length === 0) return;
-          // A fixed corner puts a picture off the side of a phone, so it lands
-          // where the board is being looked at, as a dropped one does.
-          const [centreX, centreY] = viewportCentre();
-          void addImages(files, centreX - 140, centreY - 100);
-        }}
+        onChange={onFilesPicked}
+      />
+
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={onFilesPicked}
       />
 
       {sheetOpen && <ShortcutSheet onClose={() => setSheetOpen(false)} />}

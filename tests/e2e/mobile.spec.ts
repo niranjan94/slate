@@ -280,3 +280,30 @@ test("a handle answers a finger that lands near it rather than on it", async ({
 
   await expect.poll(() => pictureCount(page)).toBe(0);
 });
+
+test.describe("what a phone is offered", () => {
+  test("the camera, in place of pairing a phone to itself", async ({
+    page,
+  }) => {
+    await openBoard(page);
+    await page.getByRole("button", { name: "More" }).click();
+
+    await expect(
+      page.getByRole("button", { name: "Take a photo" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Add from your phone" }),
+    ).toBeHidden();
+    expect(await page.locator('input[capture="environment"]').count()).toBe(1);
+  });
+
+  test("gestures, in place of keys it does not have", async ({ page }) => {
+    await openBoard(page);
+    await page.getByRole("button", { name: "More" }).click();
+    await page.getByRole("button", { name: "How this works" }).click();
+
+    await expect(page.getByText("Gestures")).toBeVisible();
+    await expect(page.getByText("Two fingers")).toBeVisible();
+    await expect(page.getByText("⌘ is Ctrl on Windows and Linux")).toBeHidden();
+  });
+});

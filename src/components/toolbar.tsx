@@ -167,14 +167,25 @@ export function Toolbar({
   if (narrow) {
     return (
       <>
-        {tool === "shape" && shapeRow}
-        {inks && (
-          <StyleRow
-            color={color}
-            width={width}
-            onSelectColor={onSelectColor}
-            onSelectWidth={onSelectWidth}
+        {phone ? (
+          <PhonePanel
+            state={phone}
+            onCopy={onCopyPhoneLink}
+            onRevoke={onRevokePhone}
+            onClose={onTogglePhone}
           />
+        ) : (
+          <>
+            {tool === "shape" && shapeRow}
+            {inks && (
+              <StyleRow
+                color={color}
+                width={width}
+                onSelectColor={onSelectColor}
+                onSelectWidth={onSelectWidth}
+              />
+            )}
+          </>
         )}
 
         <div
