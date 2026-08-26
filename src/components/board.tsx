@@ -69,7 +69,7 @@ type BoardProps = {
   status: LinkStatus;
   peers: PeerPresence[];
   localName: string;
-  onRename: (name: string) => void;
+  onRename: (name: string) => string;
 };
 
 const clampZoom = (zoom: number) =>
@@ -172,12 +172,12 @@ export function Board({
     const canvas = canvasRef.current;
     const parent = canvas?.parentElement;
     if (!canvas || !parent) return;
-    const fit = () => {
+    const fitCanvas = () => {
       dprRef.current = resizeCanvas(canvas);
       scheduleRedraw();
     };
-    fit();
-    const observer = new ResizeObserver(fit);
+    fitCanvas();
+    const observer = new ResizeObserver(fitCanvas);
     observer.observe(parent);
     return () => observer.disconnect();
   }, [scheduleRedraw]);
