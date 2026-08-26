@@ -334,6 +334,8 @@ export function Board({
         image.ratio,
       );
       undoManager.stopCapturing();
+      // The panel covers the middle of the board, which is where photos land.
+      setPhoneOpen(false);
       // No setTool: an arrival must not pull the tool out from under a stroke.
       showToast("Photo from your phone");
     },
