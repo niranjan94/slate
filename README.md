@@ -29,6 +29,24 @@ browser and carries across boards.
 | `pnpm start` | Serve the production build |
 | `pnpm lint` | Biome lint and format check |
 | `pnpm format` | Biome format, writing changes |
+| `pnpm test` | Unit tests |
+| `pnpm test:e2e` | Browser tests |
+
+## Tests
+
+`pnpm test` runs the unit suite over the parts that can be checked without a
+browser: the sync protocol driving two documents through the same code the data
+channel uses, the board model and its undo scoping, text merging under
+simultaneous edits, room codes, names, and ICE configuration.
+
+`pnpm test:e2e` builds the app, serves it, and drives Chromium through the
+drawing surface: ink, shapes, undo, erase, text placement and pruning, image
+import, zoom, naming, and what survives a reload. One test claims a slot on the
+public PeerJS broker, so it needs the network and says so; a failure there means
+the broker was unreachable rather than the board being broken.
+
+Neither suite covers two browsers talking to each other. That needs a relay, a
+live broker and two engines, so it stays a manual check before deploying.
 
 ## Connecting through a relay
 
