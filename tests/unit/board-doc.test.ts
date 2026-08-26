@@ -7,6 +7,7 @@ import {
   clearBoard,
   createInkStroke,
   createShapeStroke,
+  duplicateElement,
   elementsOf,
   isBoardEmpty,
   LOCAL_ORIGIN,
@@ -146,6 +147,46 @@ describe("elements", () => {
 
     expect(readElements(doc)).toHaveLength(0);
     expect(() => removeElement(doc, id)).not.toThrow();
+  });
+
+  it("copies a picture beside itself", () => {
+    const id = addImageElement(
+      doc,
+      AUTHOR,
+      10,
+      20,
+      "data:image/png;base64,AA==",
+      1.5,
+    );
+    updateElement(doc, id, { a: 45 });
+    const copy = duplicateElement(doc, id, 7, 28, 28);
+    const [first, second] = readElements(doc);
+
+    expect(copy).not.toBe(id);
+    expect(second.x).toBe(38);
+    expect(second.y).toBe(48);
+    expect(second.a).toBe(45);
+    expect(second.type === "image" && second.src).toBe(
+      "data:image/png;base64,AA==",
+    );
+    expect(second.author).toBe(7);
+    expect(second.z).toBeGreaterThan(first.z);
+  });
+
+  it("copies what is written in a text box, not the box's identity", () => {
+    const id = addTextElement(doc, AUTHOR, "#123456", 0, 0);
+    textBodyOf(doc, id)?.insert(0, "kept");
+    const copy = duplicateElement(doc, id, AUTHOR, 0, 0);
+    if (!copy) throw new Error("nothing was copied");
+
+    textBodyOf(doc, copy)?.insert(4, " twice");
+
+    expect(textBodyOf(doc, id)?.toString()).toBe("kept");
+    expect(textBodyOf(doc, copy)?.toString()).toBe("kept twice");
+  });
+
+  it("copies nothing when there is nothing to copy", () => {
+    expect(duplicateElement(doc, "missing", AUTHOR, 0, 0)).toBeNull();
   });
 
   it("keeps a text body only for text elements", () => {

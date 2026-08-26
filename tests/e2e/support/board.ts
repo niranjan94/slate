@@ -92,3 +92,18 @@ export const rotations = (page: Page) =>
         .map((node) => (node as HTMLElement).style.transform)
         .filter((transform) => transform.startsWith("rotate")),
     );
+
+/** The wrapper around a picture carries its world position as an inline left and top. */
+export const pictureOrigins = (page: Page) =>
+  page.locator("div").evaluateAll((nodes) =>
+    nodes
+      .filter((node) =>
+        (node as HTMLElement).style.backgroundImage.startsWith(
+          'url("data:image',
+        ),
+      )
+      .map((node) => {
+        const wrapper = node.parentElement as HTMLElement;
+        return [wrapper.style.left, wrapper.style.top];
+      }),
+  );

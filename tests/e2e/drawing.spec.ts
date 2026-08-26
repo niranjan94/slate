@@ -50,6 +50,35 @@ test.describe("the drawing surface", () => {
     expect(Math.abs(afterUndo - afterPen)).toBeLessThan(afterPen * 0.1);
   });
 
+  test("redo puts back what undo took", async ({ page }) => {
+    await drag(page, [420, 420], [760, 300]);
+    const drawn = await inkPixels(page);
+    await page.getByRole("button", { name: "Undo" }).click();
+    await expect.poll(() => inkPixels(page)).toBe(0);
+
+    await page.getByRole("button", { name: "Redo" }).click();
+
+    await expect.poll(() => inkPixels(page)).toBe(drawn);
+  });
+
+  test("the keyboard undoes and redoes too", async ({ page }) => {
+    await drag(page, [420, 420], [760, 300]);
+    const drawn = await inkPixels(page);
+
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect.poll(() => inkPixels(page)).toBe(0);
+
+    await page.keyboard.press("ControlOrMeta+Shift+z");
+
+    await expect.poll(() => inkPixels(page)).toBe(drawn);
+  });
+
+  test("redo with nothing to redo says so", async ({ page }) => {
+    await page.getByRole("button", { name: "Redo" }).click();
+
+    await expect(page.getByText("Nothing to redo")).toBeVisible();
+  });
+
   test("the eraser removes ink rather than painting over it", async ({
     page,
   }) => {
