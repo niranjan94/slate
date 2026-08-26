@@ -7,6 +7,7 @@ import {
   companionPeerId,
   type ImageMessage,
   imageMessage,
+  MAX_IMAGE_SRC_LENGTH,
   parseCompanionMessage,
 } from "@/lib/companion";
 import { peerConfig } from "@/lib/ice";
@@ -36,6 +37,11 @@ const ACK_NOTES: Record<AckReason, string> = {
   "no-board": "that board is no longer open",
   rejected: "the board refused it",
 };
+
+/** Data URLs are base64, so the transferred size is about three quarters of the text. */
+function approximateSize(length: number): string {
+  return `${((length * 3) / 4 / 1_000_000).toFixed(1)}MB`;
+}
 
 function noteFor(reason: string | undefined): string {
   if (!reason) return "did not arrive";
@@ -236,6 +242,15 @@ export function PhoneSender({ nonce }: { nonce: string }) {
         try {
           // Downscaled here so the channel carries a photo, not a camera original.
           const image = await importImage(file);
+          if (image.src.length > MAX_IMAGE_SRC_LENGTH) {
+            // Refused here rather than after the transfer the board would reject.
+            patch(key, {
+              src: image.src,
+              state: "failed",
+              note: `too large to send at ${approximateSize(image.src.length)}`,
+            });
+            continue;
+          }
           const message = imageMessage(image);
           patch(key, { messageId: message.id, src: image.src });
           // One send in flight at a time, so a burst cannot outrun the acks.

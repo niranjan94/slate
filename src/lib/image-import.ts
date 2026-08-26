@@ -22,6 +22,17 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 }
 
 /**
+ * WebKit encodes no webp at all and quietly answers with png, which for a photograph
+ * is larger than the jpeg it came from, so jpeg is the fallback rather than the
+ * untouched original: keeping the original would undo the downscale entirely.
+ */
+function encodeSmallest(canvas: HTMLCanvasElement): string {
+  const webp = canvas.toDataURL("image/webp", QUALITY);
+  if (webp.startsWith("data:image/webp")) return webp;
+  return canvas.toDataURL("image/jpeg", QUALITY);
+}
+
+/**
  * Images travel inside the CRDT and therefore over the data channel, so a phone
  * photo is downscaled before it ever enters the document.
  */
@@ -44,9 +55,9 @@ export async function importImage(file: File): Promise<ImportedImage> {
   if (!ctx) return { src: original, ratio };
   ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
 
-  const encoded = canvas.toDataURL("image/webp", QUALITY);
-  const src = encoded.startsWith("data:image/webp") ? encoded : original;
-  return { src, ratio };
+  const encoded = encodeSmallest(canvas);
+  // Re-encoding can inflate an already small file, and the original is fine then.
+  return { src: encoded.length < original.length ? encoded : original, ratio };
 }
 
 export function imageFilesFrom(list: FileList | null | undefined): File[] {
