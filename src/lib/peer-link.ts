@@ -2,6 +2,7 @@ import Peer, { type DataConnection } from "peerjs";
 import type * as awarenessProtocol from "y-protocols/awareness";
 import { removeAwarenessStates } from "y-protocols/awareness";
 import type * as Y from "yjs";
+import { peerConfig } from "./ice";
 import { peerSlotId, type Slot } from "./room";
 import {
   applyMessage,
@@ -100,7 +101,11 @@ export class PeerLink {
     if (this.disposed) return;
     this.setStatus(this.everConnected ? "reconnecting" : "connecting");
 
-    const peer = new Peer(peerSlotId(this.code, slot), { debug: 0 });
+    const config = peerConfig();
+    const peer = new Peer(
+      peerSlotId(this.code, slot),
+      config ? { debug: 0, config } : { debug: 0 },
+    );
     this.peer = peer;
 
     peer.on("open", () => {
