@@ -39,7 +39,6 @@ export type BoardRoomState = {
   room: BoardRoom | null;
   status: LinkStatus;
   peers: PeerPresence[];
-  hydrated: boolean;
   localName: string;
   rename: (name: string) => string;
 };
@@ -75,7 +74,6 @@ export function useBoardRoom(code: string): BoardRoomState {
   const [room, setRoom] = useState<BoardRoom | null>(null);
   const [status, setStatus] = useState<LinkStatus>("connecting");
   const [peers, setPeers] = useState<PeerPresence[]>([]);
-  const [hydrated, setHydrated] = useState(false);
   const [localName, setLocalName] = useState("");
 
   useEffect(() => {
@@ -98,9 +96,6 @@ export function useBoardRoom(code: string): BoardRoomState {
     };
     awareness.on("change", syncRoster);
 
-    const markHydrated = () => setHydrated(true);
-    persistence.on("synced", markHydrated);
-
     const releaseAwareness = () => awareness.setLocalState(null);
     window.addEventListener("beforeunload", releaseAwareness);
 
@@ -116,7 +111,6 @@ export function useBoardRoom(code: string): BoardRoomState {
 
     return () => {
       window.removeEventListener("beforeunload", releaseAwareness);
-      persistence.off("synced", markHydrated);
       awareness.off("change", syncRoster);
       link.destroy();
       undoManager.destroy();
@@ -125,7 +119,6 @@ export function useBoardRoom(code: string): BoardRoomState {
       doc.destroy();
       setRoom(null);
       setPeers([]);
-      setHydrated(false);
       setStatus("connecting");
     };
   }, [code]);
@@ -149,7 +142,7 @@ export function useBoardRoom(code: string): BoardRoomState {
     [room, localName],
   );
 
-  return { room, status, peers, hydrated, localName, rename };
+  return { room, status, peers, localName, rename };
 }
 
 /**
