@@ -40,8 +40,8 @@ export function Lobby() {
   }, [create]);
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center overflow-hidden bg-paper bg-[length:22px_22px] bg-[radial-gradient(rgb(28_27_25_/_0.13)_1px,transparent_1px)] p-6">
-      <div className="w-full max-w-[430px] rounded-[18px] border border-line bg-panel px-[30px] pt-[30px] pb-[26px] shadow-card">
+    <div className="fixed inset-0 flex items-center justify-center overflow-y-auto bg-paper bg-[length:22px_22px] bg-[radial-gradient(rgb(28_27_25_/_0.13)_1px,transparent_1px)] p-6 pt-[calc(24px+var(--safe-t))] pb-[calc(24px+var(--safe-b))]">
+      <div className="my-auto w-full max-w-[430px] shrink-0 rounded-[18px] border border-line bg-panel px-[30px] pt-[30px] pb-[26px] shadow-card">
         <div className="flex items-baseline gap-[9px]">
           <span className="text-[25px] font-semibold tracking-[-0.02em]">
             slate

@@ -4,8 +4,8 @@ import { SHORTCUT_GROUPS } from "@/lib/shortcuts";
 
 export function ShortcutSheet({ onClose }: { onClose: () => void }) {
   return (
-    <div className="absolute inset-0 z-20 flex items-center justify-center bg-paper/70 p-6 backdrop-blur-[2px]">
-      <div className="w-full max-w-[560px] rounded-[18px] border border-line bg-panel px-[30px] pt-[26px] pb-[22px] shadow-card">
+    <div className="absolute inset-0 z-20 flex items-center justify-center overflow-y-auto bg-paper/70 p-6 pt-[calc(24px+var(--safe-t))] pb-[calc(24px+var(--safe-b))] backdrop-blur-[2px]">
+      <div className="my-auto w-full max-w-[560px] shrink-0 rounded-[18px] border border-line bg-panel px-[30px] pt-[26px] pb-[22px] shadow-card">
         <div className="mb-4 flex items-baseline justify-between gap-4">
           <span className="text-[19px] font-semibold tracking-[-0.01em]">
             Keyboard shortcuts

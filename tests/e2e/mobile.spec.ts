@@ -86,3 +86,32 @@ test("the finger left over from a pinch does not start drawing", async ({
 
   expect(await inkPixels(page)).toBe(0);
 });
+
+test.describe("a phone on its side", () => {
+  test.use({ viewport: { width: 844, height: 390 } });
+
+  test("can still reach the button that opens the board", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: "Start a new board" }).click();
+    await page.waitForURL(/\/b\/[A-Z0-9]{5}$/);
+
+    const start = page.getByRole("button", { name: "Start drawing" });
+    await start.scrollIntoViewIfNeeded();
+    await start.click();
+
+    await expect(start).toBeHidden();
+  });
+
+  test("can still reach the button that closes the shortcut sheet", async ({
+    page,
+  }) => {
+    await openBoard(page);
+    await page.getByRole("button", { name: "Keyboard shortcuts" }).click();
+
+    const done = page.getByRole("button", { name: "Done" });
+    await done.scrollIntoViewIfNeeded();
+    await done.click();
+
+    await expect(done).toBeHidden();
+  });
+});
