@@ -99,16 +99,19 @@ export function PhoneSender({ nonce }: { nonce: string }) {
     const retry = () => {
       if (disposed || retryTimer) return;
       clearDialTimer();
-      teardown();
       if (attempts >= DIAL_ATTEMPTS) {
+        teardown();
         setLink("gone");
         return;
       }
       setLink("waiting");
+      // Armed before the teardown, which closes an open channel and lands back
+      // here through its own close handler.
       retryTimer = setTimeout(() => {
         retryTimer = null;
         open();
       }, RETRY_STEP_MS * attempts);
+      teardown();
     };
 
     const dial = (mine: Peer) => {
