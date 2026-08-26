@@ -1,5 +1,5 @@
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-const PEER_NAMESPACE = "slate-wb";
+export const PEER_NAMESPACE = "slate-wb";
 
 export const ROOM_CODE_LENGTH = 5;
 
