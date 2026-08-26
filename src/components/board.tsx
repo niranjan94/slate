@@ -778,28 +778,38 @@ export function Board({
     [doc, toWorld, broadcastCursor, scheduleRedraw],
   );
 
-  const endGesture = useCallback(() => {
-    const gesture = gestureRef.current;
-    gestureRef.current = null;
+  /**
+   * `abandoned` is the pointercancel path, where the platform took the touch away
+   * mid gesture. A shape being dragged out has nothing committed yet, so it is
+   * dropped rather than landing at whatever size the interruption caught it at.
+   */
+  const endGesture = useCallback(
+    (abandoned = false) => {
+      const gesture = gestureRef.current;
+      gestureRef.current = null;
 
-    if (gesture?.type === "shape") {
-      const preview = previewRef.current;
-      previewRef.current = null;
-      if (
-        preview &&
-        Math.abs(preview.x1 - preview.x0) + Math.abs(preview.y1 - preview.y0) >
-          MIN_SHAPE_SIZE
-      ) {
-        doc.transact(
-          () => strokesOf(doc).push([createShapeStroke(preview)]),
-          LOCAL_ORIGIN,
-        );
+      if (gesture?.type === "shape") {
+        const preview = previewRef.current;
+        previewRef.current = null;
+        if (
+          !abandoned &&
+          preview &&
+          Math.abs(preview.x1 - preview.x0) +
+            Math.abs(preview.y1 - preview.y0) >
+            MIN_SHAPE_SIZE
+        ) {
+          doc.transact(
+            () => strokesOf(doc).push([createShapeStroke(preview)]),
+            LOCAL_ORIGIN,
+          );
+        }
+        scheduleRedraw();
       }
-      scheduleRedraw();
-    }
 
-    if (gesture) undoManager.stopCapturing();
-  }, [doc, undoManager, scheduleRedraw]);
+      if (gesture) undoManager.stopCapturing();
+    },
+    [doc, undoManager, scheduleRedraw],
+  );
 
   const onPointerLeave = useCallback(() => {
     endGesture();
@@ -854,7 +864,8 @@ export function Board({
         aria-label="Whiteboard surface"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
-        onPointerUp={endGesture}
+        onPointerUp={() => endGesture()}
+        onPointerCancel={() => endGesture(true)}
         onPointerLeave={onPointerLeave}
         onDragOver={(event) => event.preventDefault()}
         onDrop={onDrop}
