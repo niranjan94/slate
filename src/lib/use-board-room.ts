@@ -41,7 +41,7 @@ export type BoardRoomState = {
   peers: PeerPresence[];
   hydrated: boolean;
   localName: string;
-  rename: (name: string) => void;
+  rename: (name: string) => string;
 };
 
 /**
@@ -130,18 +130,23 @@ export function useBoardRoom(code: string): BoardRoomState {
     };
   }, [code]);
 
-  /** An empty name is not an error, it just hands the person back a generated one. */
+  /**
+   * An empty name is not an error, it just hands the person back a generated
+   * one. The applied name is returned because it can differ from what was
+   * typed, and the field showing it has to end up agreeing.
+   */
   const rename = useCallback(
     (raw: string) => {
-      if (!room) return;
+      if (!room) return localName;
       const chosen = sanitizeName(raw).trim();
       const next = chosen || displayNameFor(room.localClientId);
       storeName(chosen);
       room.awareness.setLocalStateField("user", { name: next });
       publishName(room.doc, room.localClientId, next);
       setLocalName(next);
+      return next;
     },
-    [room],
+    [room, localName],
   );
 
   return { room, status, peers, hydrated, localName, rename };

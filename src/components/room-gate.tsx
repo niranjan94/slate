@@ -8,7 +8,7 @@ type RoomGateProps = {
   status: LinkStatus;
   code: string;
   localName: string;
-  onRename: (name: string) => void;
+  onRename: (name: string) => string;
   onCopy: () => void;
   onDismiss: () => void;
 };

@@ -5,7 +5,7 @@ import { MAX_NAME_LENGTH, sanitizeName } from "@/lib/room";
 
 type NameProps = {
   name: string;
-  onRename: (name: string) => void;
+  onRename: (name: string) => string;
 };
 
 const INPUT_BASE =
@@ -26,6 +26,7 @@ function useDraft(name: string) {
   return {
     draft,
     inputRef,
+    set: setDraft,
     change: (raw: string) => setDraft(sanitizeName(raw)),
     reset: () => setDraft(name),
   };
@@ -34,7 +35,7 @@ function useDraft(name: string) {
 /** Compact rename control for the board chrome, so a name can be changed mid-session. */
 export function NameChip({ name, onRename }: NameProps) {
   const [editing, setEditing] = useState(false);
-  const { draft, inputRef, change, reset } = useDraft(name);
+  const { draft, inputRef, set, change, reset } = useDraft(name);
 
   useEffect(() => {
     if (editing) inputRef.current?.select();
@@ -42,7 +43,7 @@ export function NameChip({ name, onRename }: NameProps) {
 
   const commit = () => {
     setEditing(false);
-    if (draft.trim() !== name) onRename(draft);
+    set(onRename(draft));
   };
 
   return (
@@ -86,11 +87,11 @@ export function NameChip({ name, onRename }: NameProps) {
 
 /** Full-width field for the entry panel, where naming yourself is the first thing to do. */
 export function NameInput({ name, onRename }: NameProps) {
-  const { draft, inputRef, change } = useDraft(name);
+  const { draft, inputRef, set, change } = useDraft(name);
 
-  const commit = () => {
-    if (draft.trim() !== name) onRename(draft);
-  };
+  // Set from the applied name rather than the typed one: clearing the field
+  // hands back a generated name, which the field then has to show.
+  const commit = () => set(onRename(draft));
 
   return (
     <label className="mb-3 block">
