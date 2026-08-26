@@ -31,6 +31,11 @@ take it off the board. Turning lands on a right angle when it is close to one,
 or steps in fifteens while Shift is held. All of it is undoable, and a picture
 you have just added arrives already in hand.
 
+The keyboard reaches the same things. Arrows nudge what you have in hand and
+hold Shift to nudge it ten, `[` and `]` turn it, ⌘D leaves a copy beside it, and
+Backspace takes it off the board. Undo and Redo sit in the top right and answer
+⌘Z and ⇧⌘Z. Press `?` for the whole list, which is also the button beside them.
+
 | Script | Does |
 | --- | --- |
 | `pnpm dev` | Development server |
