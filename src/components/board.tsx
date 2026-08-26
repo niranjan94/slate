@@ -9,6 +9,7 @@ import {
   clearBoard,
   createInkStroke,
   createShapeStroke,
+  duplicateElement,
   elementsOf,
   LOCAL_ORIGIN,
   pruneEmptyText,
@@ -48,6 +49,7 @@ import {
 import { NameChip } from "./name-field";
 import { PeerCursors } from "./peer-cursors";
 import { RoomGate } from "./room-gate";
+import { ShortcutSheet } from "./shortcut-sheet";
 import { TextBox } from "./text-box";
 import { Toolbar } from "./toolbar";
 
@@ -56,6 +58,9 @@ const MIN_POINT_DISTANCE = 1.2;
 const MIN_SHAPE_SIZE = 6;
 const MIN_ELEMENT_WIDTH = 60;
 const ANGLE_STEP = 15;
+const NUDGE_STEP = 1;
+const NUDGE_FAR = 10;
+const DUPLICATE_OFFSET = 28;
 const RIGHT_ANGLE_PULL = 4;
 
 type Gesture =
@@ -93,6 +98,8 @@ type BoardProps = {
   localName: string;
   onRename: (name: string) => string;
 };
+
+const HOME_VIEW: Viewport = { zoom: 1, panX: 0, panY: 0 };
 
 const clampZoom = (zoom: number) =>
   Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom));
@@ -137,12 +144,13 @@ export function Board({
   const [shape, setShape] = useState<ShapeId>("rect");
   const [color, setColor] = useState("#1c1b19");
   const [width, setWidth] = useState(3);
-  const [view, setView] = useState<Viewport>({ zoom: 1, panX: 0, panY: 0 });
+  const [view, setView] = useState<Viewport>(HOME_VIEW);
   const [elements, setElements] = useState<BoardElement[]>([]);
   const [toast, setToast] = useState("");
   const [gateDismissed, setGateDismissed] = useState(false);
   const [focusedTextId, setFocusedTextId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [phoneOpen, setPhoneOpen] = useState(false);
   const [companion, setCompanion] = useState<CompanionState | null>(null);
 
@@ -151,6 +159,8 @@ export function Board({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const strokesRef = useRef<Stroke[]>([]);
+  // Keys act on the element in hand without the handler resubscribing on every drag.
+  const elementsRef = useRef<BoardElement[]>([]);
   const previewRef = useRef<ShapeStroke | null>(null);
   const gestureRef = useRef<Gesture | null>(null);
   const viewRef = useRef<Viewport>(view);
@@ -208,7 +218,10 @@ export function Board({
 
   useEffect(() => {
     const map = elementsOf(doc);
-    const sync = () => setElements(readElements(doc));
+    const sync = () => {
+      elementsRef.current = readElements(doc);
+      setElements(elementsRef.current);
+    };
     sync();
     map.observeDeep(sync);
     return () => map.unobserveDeep(sync);
@@ -322,6 +335,16 @@ export function Board({
     undoManager.undo();
   }, [undoManager, showToast]);
 
+  const redo = useCallback(() => {
+    if (undoManager.redoStack.length === 0) {
+      showToast("Nothing to redo");
+      return;
+    }
+    undoManager.redo();
+  }, [undoManager, showToast]);
+
+  const pickImage = useCallback(() => fileInputRef.current?.click(), []);
+
   const addImages = useCallback(
     async (files: File[], worldX: number, worldY: number) => {
       let placed: string | null = null;
@@ -379,6 +402,59 @@ export function Board({
     [doc, localClientId, undoManager, showToast, viewportCentre],
   );
 
+  const selectedElement = useCallback(
+    () =>
+      elementsRef.current.find((element) => element.id === selectedId) ?? null,
+    [selectedId],
+  );
+
+  const nudgeSelected = useCallback(
+    (dx: number, dy: number) => {
+      const element = selectedElement();
+      if (!element) return;
+      updateElement(doc, element.id, {
+        x: element.x + dx,
+        y: element.y + dy,
+      });
+    },
+    [doc, selectedElement],
+  );
+
+  const turnSelected = useCallback(
+    (delta: number) => {
+      const element = selectedElement();
+      if (!element) return;
+      updateElement(doc, element.id, { a: snapAngle(element.a + delta, true) });
+    },
+    [doc, selectedElement],
+  );
+
+  const duplicateSelected = useCallback(() => {
+    const element = selectedElement();
+    if (!element) return;
+    const copy = duplicateElement(
+      doc,
+      element.id,
+      localClientId,
+      DUPLICATE_OFFSET,
+      DUPLICATE_OFFSET,
+    );
+    if (!copy) return;
+    undoManager.stopCapturing();
+    // The copy is what you have in hand now, so the original gives up the caret.
+    if (document.activeElement instanceof HTMLTextAreaElement) {
+      document.activeElement.blur();
+    }
+    setSelectedId(copy);
+    showToast("Duplicated");
+  }, [doc, localClientId, undoManager, selectedElement, showToast]);
+
+  const editSelectedText = useCallback(() => {
+    const element = selectedElement();
+    if (element?.type !== "text") return;
+    setFocusedTextId(element.id);
+  }, [selectedElement]);
+
   const removeSelected = useCallback(() => {
     if (!selectedId) return;
     removeElement(doc, selectedId);
@@ -428,7 +504,10 @@ export function Board({
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        if (phoneOpen) {
+        if (sheetOpen) {
+          event.preventDefault();
+          setSheetOpen(false);
+        } else if (phoneOpen) {
           event.preventDefault();
           setPhoneOpen(false);
         } else {
@@ -440,34 +519,97 @@ export function Board({
       if (
         event.code === "Space" &&
         !phoneOpen &&
+        !sheetOpen &&
         !isTypingTarget(event.target)
       ) {
         spaceRef.current = true;
         return;
       }
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") {
-        event.preventDefault();
-        if (event.shiftKey) undoManager.redo();
-        else undo();
+      // Chords stay live behind an open panel and inside a text box, as undo always has.
+      if (event.metaKey || event.ctrlKey) {
+        const chord = event.key.toLowerCase();
+        if (chord === "z") {
+          event.preventDefault();
+          if (event.shiftKey) redo();
+          else undo();
+        } else if (chord === "y") {
+          event.preventDefault();
+          redo();
+        } else if (chord === "d" && canMove && selectedId) {
+          event.preventDefault();
+          duplicateSelected();
+        }
         return;
       }
-      if (
-        phoneOpen ||
-        isTypingTarget(event.target) ||
-        event.metaKey ||
-        event.ctrlKey
-      )
-        return;
-      if (
-        canMove &&
-        selectedId &&
-        (event.key === "Delete" || event.key === "Backspace")
-      ) {
+      if (isTypingTarget(event.target)) return;
+      if (event.key === "?") {
         event.preventDefault();
-        removeSelected();
+        setSheetOpen((open) => !open);
         return;
       }
-      const next = shortcutToTool(event.key);
+      if (phoneOpen || sheetOpen) return;
+
+      if (canMove && selectedId) {
+        const step = event.shiftKey ? NUDGE_FAR : NUDGE_STEP;
+        switch (event.key) {
+          case "Delete":
+          case "Backspace":
+            event.preventDefault();
+            removeSelected();
+            return;
+          case "ArrowLeft":
+            event.preventDefault();
+            nudgeSelected(-step, 0);
+            return;
+          case "ArrowRight":
+            event.preventDefault();
+            nudgeSelected(step, 0);
+            return;
+          case "ArrowUp":
+            event.preventDefault();
+            nudgeSelected(0, -step);
+            return;
+          case "ArrowDown":
+            event.preventDefault();
+            nudgeSelected(0, step);
+            return;
+          case "[":
+            event.preventDefault();
+            turnSelected(-ANGLE_STEP);
+            return;
+          case "]":
+            event.preventDefault();
+            turnSelected(ANGLE_STEP);
+            return;
+          case "Enter":
+            event.preventDefault();
+            editSelectedText();
+            return;
+        }
+      }
+
+      if (event.key === "0") {
+        setView(HOME_VIEW);
+        return;
+      }
+      if (event.key === "=" || event.key === "+") {
+        zoomToCentre(1.2);
+        return;
+      }
+      if (event.key === "-") {
+        zoomToCentre(1 / 1.2);
+        return;
+      }
+      const key = event.key.toLowerCase();
+      if (key === "p") {
+        togglePhone();
+        return;
+      }
+      if (key === "i") {
+        pickImage();
+        return;
+      }
+      const next = shortcutToTool(key);
       if (next) setTool(next);
     };
 
@@ -481,7 +623,22 @@ export function Board({
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
     };
-  }, [undo, undoManager, phoneOpen, canMove, selectedId, removeSelected]);
+  }, [
+    undo,
+    redo,
+    phoneOpen,
+    sheetOpen,
+    canMove,
+    selectedId,
+    removeSelected,
+    nudgeSelected,
+    turnSelected,
+    duplicateSelected,
+    editSelectedText,
+    togglePhone,
+    pickImage,
+    zoomToCentre,
+  ]);
 
   const broadcastCursor = useCallback(
     (worldX: number, worldY: number) => {
@@ -763,7 +920,12 @@ export function Board({
                     body={textBodyOf(doc, element.id)}
                     caretCursor={canMove ? "grab" : "text"}
                     focusOnMount={focusedTextId === element.id}
-                    onBlur={() => pruneEmptyText(doc, element.id)}
+                    onBlur={() => {
+                      pruneEmptyText(doc, element.id);
+                      setFocusedTextId((current) =>
+                        current === element.id ? null : current,
+                      );
+                    }}
                   />
                 ) : (
                   <div
@@ -939,10 +1101,19 @@ export function Board({
       <div className="absolute top-[18px] right-[18px] flex items-center gap-1 rounded-xl border border-line bg-panel p-[7px] shadow-panel">
         <button
           type="button"
+          title="Undo · ⌘Z"
           onClick={undo}
           className="cursor-pointer rounded-lg px-3 py-2 text-[13.5px] font-medium text-ink-soft transition-colors hover:bg-hover"
         >
           Undo
+        </button>
+        <button
+          type="button"
+          title="Redo · ⇧⌘Z"
+          onClick={redo}
+          className="cursor-pointer rounded-lg px-3 py-2 text-[13.5px] font-medium text-ink-soft transition-colors hover:bg-hover"
+        >
+          Redo
         </button>
         <button
           type="button"
@@ -954,6 +1125,19 @@ export function Board({
           className="cursor-pointer rounded-lg px-3 py-2 text-[13.5px] font-medium text-ink-ghost transition-colors hover:bg-hover hover:text-peer"
         >
           Clear
+        </button>
+        <div className="mx-0.5 h-[22px] w-px bg-rule" />
+        <button
+          type="button"
+          title="Keyboard shortcuts · ?"
+          aria-label="Keyboard shortcuts"
+          aria-pressed={sheetOpen}
+          onClick={() => setSheetOpen((open) => !open)}
+          className={`size-9 cursor-pointer rounded-lg text-[13.5px] font-medium transition-colors ${
+            sheetOpen ? "bg-active text-ink" : "text-ink-soft hover:bg-hover"
+          }`}
+        >
+          ?
         </button>
       </div>
 
@@ -973,14 +1157,14 @@ export function Board({
           if (tool === "eraser") setTool("pen");
         }}
         onSelectWidth={setWidth}
-        onPickImage={() => fileInputRef.current?.click()}
+        onPickImage={pickImage}
         phone={phoneOpen ? companion : null}
         onTogglePhone={togglePhone}
         onRevokePhone={() => host.revoke()}
         onCopyPhoneLink={() => void copyPhoneLink()}
         onZoomIn={() => zoomToCentre(1.2)}
         onZoomOut={() => zoomToCentre(1 / 1.2)}
-        onZoomReset={() => setView({ zoom: 1, panX: 0, panY: 0 })}
+        onZoomReset={() => setView(HOME_VIEW)}
       />
 
       <div className="pointer-events-none absolute bottom-[88px] left-1/2 -translate-x-1/2 text-[11.5px] leading-[1.5] tracking-[0.01em] whitespace-nowrap text-ink-ghost">
@@ -1016,6 +1200,8 @@ export function Board({
           if (files.length > 0) void addImages(files, 140, 150);
         }}
       />
+
+      {sheetOpen && <ShortcutSheet onClose={() => setSheetOpen(false)} />}
 
       {gateVisible && (
         <RoomGate

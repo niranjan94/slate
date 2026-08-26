@@ -253,6 +253,41 @@ export function addImageElement(
   return id;
 }
 
+/** Copies an element beside itself, authored by whoever asked for the copy. */
+export function duplicateElement(
+  doc: Y.Doc,
+  id: string,
+  author: number,
+  dx: number,
+  dy: number,
+): string | null {
+  const source = elementsOf(doc).get(id);
+  if (!source) return null;
+  const copy = crypto.randomUUID();
+  doc.transact(() => {
+    const element = new Y.Map<unknown>();
+    element.set("type", source.get("type"));
+    element.set("x", (source.get("x") as number) + dx);
+    element.set("y", (source.get("y") as number) + dy);
+    element.set("w", source.get("w"));
+    element.set("a", (source.get("a") as number | undefined) ?? 0);
+    element.set("author", author);
+    element.set("z", nextZ(doc));
+    if (source.get("type") === "image") {
+      element.set("src", source.get("src"));
+      element.set("ratio", source.get("ratio"));
+    } else {
+      element.set("color", source.get("color"));
+      const body = new Y.Text();
+      const text = (source.get("body") as Y.Text | undefined)?.toString() ?? "";
+      if (text) body.insert(0, text);
+      element.set("body", body);
+    }
+    elementsOf(doc).set(copy, element);
+  }, LOCAL_ORIGIN);
+  return copy;
+}
+
 export function updateElement(
   doc: Y.Doc,
   id: string,
