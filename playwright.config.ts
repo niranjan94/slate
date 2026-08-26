@@ -17,7 +17,20 @@ export default defineConfig({
     viewport: { width: 1280, height: 800 },
     trace: "retain-on-failure",
   },
-  projects: [{ name: "chromium", use: devices["Desktop Chrome"] }],
+  projects: [
+    {
+      name: "chromium",
+      use: devices["Desktop Chrome"],
+      testIgnore: "**/encoding.spec.ts",
+    },
+    // One spec only: image encoding is the one behaviour that differs by engine in a
+    // way Chromium cannot reveal, and a second full pass is not worth the minutes.
+    {
+      name: "webkit",
+      use: devices["Desktop Safari"],
+      testMatch: "**/encoding.spec.ts",
+    },
+  ],
   webServer: {
     command: `pnpm build && pnpm start --port ${PORT}`,
     url: BASE_URL,
