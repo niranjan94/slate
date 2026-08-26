@@ -629,6 +629,7 @@ export function Board({
         event.code === "Space" &&
         !phoneOpen &&
         !sheetOpen &&
+        !menuOpen &&
         !isTypingTarget(event.target)
       ) {
         spaceRef.current = true;
@@ -656,7 +657,7 @@ export function Board({
         setSheetOpen((open) => !open);
         return;
       }
-      if (phoneOpen || sheetOpen) return;
+      if (phoneOpen || sheetOpen || menuOpen) return;
 
       if (canMove && selectedId) {
         const step = event.shiftKey ? NUDGE_FAR : NUDGE_STEP;
@@ -726,17 +727,26 @@ export function Board({
       if (event.code === "Space") spaceRef.current = false;
     };
 
+    // Switching away while Space is held means the keyup never arrives, and pan
+    // would stay latched on for every pointer that follows.
+    const releaseSpace = () => {
+      spaceRef.current = false;
+    };
+
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
+    window.addEventListener("blur", releaseSpace);
     return () => {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("blur", releaseSpace);
     };
   }, [
     undo,
     redo,
     phoneOpen,
     sheetOpen,
+    menuOpen,
     canMove,
     selectedId,
     removeSelected,
@@ -1063,6 +1073,15 @@ export function Board({
   const releasePointer = useCallback(
     (event: React.PointerEvent<HTMLDivElement>, abandoned: boolean) => {
       const pointers = pointersRef.current;
+      // A hand resting on the board was turned away on the way down, so its lift
+      // must not end the stroke the stylus is still drawing.
+      if (
+        event.pointerType === "touch" &&
+        penDownRef.current &&
+        !pointers.has(event.pointerId)
+      ) {
+        return;
+      }
       pointers.delete(event.pointerId);
       if (event.pointerType === "pen") penDownRef.current = false;
       cancelLongPress();
