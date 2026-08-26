@@ -69,3 +69,16 @@ export const zoomLabel = (page: Page) =>
 
 export const toolButton = (page: Page, name: string) =>
   page.getByRole("button", { name, exact: true });
+
+/** Board pictures are a div with an inline background image, so they are counted that way. */
+export const pictureCount = (page: Page) =>
+  page
+    .locator("div")
+    .evaluateAll(
+      (nodes) =>
+        nodes.filter((node) =>
+          (node as HTMLElement).style.backgroundImage.startsWith(
+            'url("data:image',
+          ),
+        ).length,
+    );

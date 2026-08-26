@@ -3,6 +3,7 @@ import {
   drag,
   inkPixels,
   openBoard,
+  pictureCount,
   textValues,
   toolButton,
 } from "./support/board";
@@ -59,22 +60,10 @@ test.describe("images", () => {
     await openBoard(page);
   });
 
-  const pictures = (page: Parameters<typeof inkPixels>[0]) =>
-    page
-      .locator("div")
-      .evaluateAll(
-        (nodes) =>
-          nodes.filter((node) =>
-            (node as HTMLElement).style.backgroundImage.startsWith(
-              'url("data:image',
-            ),
-          ).length,
-      );
-
   test("an imported picture lands on the board", async ({ page }) => {
     await page.setInputFiles('input[type="file"]', SAMPLE_PNG);
 
-    await expect.poll(() => pictures(page)).toBe(1);
+    await expect.poll(() => pictureCount(page)).toBe(1);
   });
 
   test("importing switches to the tool that can move it", async ({ page }) => {
