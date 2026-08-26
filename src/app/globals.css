@@ -1,26 +1,90 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  --color-paper: #f4f1ea;
+  --color-panel: #fffefb;
+  --color-field: #faf8f3;
+  --color-raised: #fdfcf8;
+  --color-hover: #f4f2ec;
+  --color-active: #f0eee7;
+
+  --color-ink: #1c1b19;
+  --color-ink-invert: #fbfaf8;
+  --color-ink-soft: #4a4844;
+  --color-ink-muted: #6f6d67;
+  --color-ink-faint: #8a8880;
+  --color-ink-ghost: #a3a19a;
+
+  --color-line: rgb(28 27 25 / 0.09);
+  --color-line-strong: rgb(28 27 25 / 0.14);
+  --color-rule: rgb(28 27 25 / 0.1);
+
+  --color-accent: oklch(0.62 0.19 250);
+  --color-accent-deep: oklch(0.45 0.16 250);
+  --color-peer: oklch(0.62 0.19 25);
+  --color-grass: oklch(0.62 0.19 145);
+  --color-amber: oklch(0.7 0.17 70);
+
+  --font-sans: var(--font-outfit), Helvetica, sans-serif;
+
+  --shadow-card:
+    0 1px 2px rgb(0 0 0 / 0.05), 0 26px 60px -30px rgb(28 27 25 / 0.35);
+  --shadow-panel:
+    0 1px 2px rgb(0 0 0 / 0.05), 0 14px 32px -22px rgb(28 27 25 / 0.5);
+  --shadow-dock:
+    0 1px 2px rgb(0 0 0 / 0.05), 0 18px 44px -22px rgb(28 27 25 / 0.55);
+  --shadow-notice: 0 14px 32px -18px rgb(28 27 25 / 0.7);
+  --shadow-art:
+    0 2px 4px rgb(28 27 25 / 0.1), 0 16px 34px -20px rgb(28 27 25 / 0.55);
+
+  --animate-pulse-ring: pulse-ring 1.6s ease-out infinite;
+  --animate-toast-in: toast-in 0.18s ease-out;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
   }
 }
 
+@keyframes toast-in {
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+html,
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  height: 100%;
+  overscroll-behavior: none;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+button,
+input,
+textarea {
+  font-family: inherit;
+}
+
+textarea {
+  resize: none;
+}
+
+::selection {
+  background: oklch(0.62 0.19 250 / 0.22);
 }
