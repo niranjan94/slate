@@ -20,6 +20,10 @@ pnpm dev
 Open `/`, start a board, and send the link or the five character room code to
 one other person. Boards hold two.
 
+Nothing has to be configured to draw on a board locally. `.env.example` lists
+the two settings a deployment wants, `NEXT_PUBLIC_SITE_URL` and
+`NEXT_PUBLIC_ICE_SERVERS`; copy it to `.env.local` when you need either.
+
 Everyone arrives under a generated name and can change it, in the panel that
 covers a new board or from the chip in the top left. The name is kept in this
 browser and carries across boards.
@@ -151,3 +155,18 @@ which is worth knowing given the rest of a board never touches a server.
 | `src/app` | Routes: the lobby at `/`, a board at `/b/[code]`, the phone sender at `/add/[nonce]`, and the generated icons, social image, `robots.txt`, `sitemap.xml` and web manifest |
 | `src/components` | Board surface, toolbar, lobby and overlays |
 | `src/lib` | Document model, canvas painting, peer link, phone pairing, room codes and the logo mark |
+
+## Contributing
+
+Issues and pull requests are welcome. `pnpm lint` and `pnpm test` should pass
+before a pull request, and `pnpm test:e2e` is worth running when a change
+touches the drawing surface. Commit messages follow
+[Conventional Commits](https://www.conventionalcommits.org).
+
+Two people on one board, across two machines or two browser engines, is the one
+thing the suite cannot check for you. It needs a live broker and a relay, so
+please say whether you tried it when a change touches the peer link.
+
+## License
+
+[MIT](LICENSE), copyright 2026 Niranjan Rajendran.

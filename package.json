@@ -2,6 +2,17 @@
   "name": "slate",
   "version": "0.1.0",
   "private": true,
+  "description": "A shared whiteboard for two, peer to peer in the browser.",
+  "license": "MIT",
+  "author": "Niranjan Rajendran (https://github.com/niranjan94)",
+  "homepage": "https://github.com/niranjan94/slate#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/niranjan94/slate.git"
+  },
+  "bugs": {
+    "url": "https://github.com/niranjan94/slate/issues"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
