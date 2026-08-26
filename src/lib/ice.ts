@@ -32,12 +32,30 @@ function parseIceServers(raw: string | undefined): RTCIceServer[] {
  * as a JSON array of RTCIceServer entries in NEXT_PUBLIC_ICE_SERVERS and it is
  * appended to the servers below.
  */
+function isUsable(server: RTCIceServer): boolean {
+  if (typeof RTCPeerConnection === "undefined") return true;
+  try {
+    new RTCPeerConnection({ iceServers: [server] }).close();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+let cached: PeerRtcConfig | null = null;
+
 export function peerConfig(): PeerRtcConfig {
-  return {
-    iceServers: [
-      ...BASE_ICE_SERVERS,
-      ...parseIceServers(process.env.NEXT_PUBLIC_ICE_SERVERS),
-    ],
+  if (cached) return cached;
+  const servers = [
+    ...BASE_ICE_SERVERS,
+    ...parseIceServers(process.env.NEXT_PUBLIC_ICE_SERVERS),
+  ];
+  // Engines disagree on TURN URL syntax: WebKit rejects a ?transport= query
+  // string outright, and one bad entry throws for the whole connection. Keep
+  // only what this browser will actually accept.
+  cached = {
+    iceServers: servers.filter(isUsable),
     sdpSemantics: "unified-plan",
   };
+  return cached;
 }
