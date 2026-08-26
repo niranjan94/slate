@@ -12,7 +12,12 @@ export const TOOLS: ToolDef[] = [
   { id: "eraser", label: "Erase", hint: "erase ink · E", shortcut: "e" },
   { id: "text", label: "Text", hint: "click to place text · T", shortcut: "t" },
   { id: "shape", label: "Shape", hint: "drag out a shape · S", shortcut: "s" },
-  { id: "select", label: "Move", hint: "move and resize · V", shortcut: "v" },
+  {
+    id: "select",
+    label: "Move",
+    hint: "move, rotate, resize · V",
+    shortcut: "v",
+  },
   { id: "pan", label: "Pan", hint: "drag the board · H", shortcut: "h" },
 ];
 
@@ -21,7 +26,7 @@ export const TOOL_STATUS: Record<ToolId, string> = {
   eraser: "drag to erase ink",
   text: "click anywhere to place text",
   shape: "drag out a shape",
-  select: "drag to move · drag a corner to resize",
+  select: "drag to move · corner resizes · top handle rotates · ⌫ removes",
   pan: "drag to move the board · ⌘ + scroll to zoom",
 };
 

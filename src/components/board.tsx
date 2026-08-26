@@ -14,6 +14,7 @@ import {
   pruneEmptyText,
   readElements,
   readStrokes,
+  removeElement,
   type ShapeId,
   type ShapeStroke,
   type Stroke,
@@ -54,6 +55,8 @@ const CURSOR_BROADCAST_MS = 40;
 const MIN_POINT_DISTANCE = 1.2;
 const MIN_SHAPE_SIZE = 6;
 const MIN_ELEMENT_WIDTH = 60;
+const ANGLE_STEP = 15;
+const RIGHT_ANGLE_PULL = 4;
 
 type Gesture =
   | {
@@ -66,7 +69,21 @@ type Gesture =
   | { type: "draw"; stroke: YStroke; lastX: number; lastY: number }
   | { type: "shape" }
   | { type: "drag"; id: string; offsetX: number; offsetY: number }
-  | { type: "resize"; id: string; originX: number; originWidth: number };
+  | {
+      type: "resize";
+      id: string;
+      originX: number;
+      originY: number;
+      originWidth: number;
+      angle: number;
+    }
+  | {
+      type: "rotate";
+      id: string;
+      centreX: number;
+      centreY: number;
+      offset: number;
+    };
 
 type BoardProps = {
   code: string;
@@ -79,6 +96,23 @@ type BoardProps = {
 
 const clampZoom = (zoom: number) =>
   Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom));
+
+const normalizeAngle = (degrees: number) => ((degrees % 360) + 360) % 360;
+
+const angleFrom = (dx: number, dy: number) =>
+  (Math.atan2(dy, dx) * 180) / Math.PI;
+
+/** A photograph almost always wants a right angle, so those pull the handle in. */
+function snapAngle(degrees: number, stepped: boolean): number {
+  const angle = normalizeAngle(degrees);
+  if (stepped) {
+    return normalizeAngle(Math.round(angle / ANGLE_STEP) * ANGLE_STEP);
+  }
+  const right = Math.round(angle / 90) * 90;
+  return Math.abs(angle - right) <= RIGHT_ANGLE_PULL
+    ? normalizeAngle(right)
+    : angle;
+}
 
 function peerLabel(status: LinkStatus, peers: PeerPresence[]): string {
   if (status === "connected" && peers.length > 0) return peers[0].name;
@@ -108,6 +142,7 @@ export function Board({
   const [toast, setToast] = useState("");
   const [gateDismissed, setGateDismissed] = useState(false);
   const [focusedTextId, setFocusedTextId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [phoneOpen, setPhoneOpen] = useState(false);
   const [companion, setCompanion] = useState<CompanionState | null>(null);
 
@@ -289,11 +324,11 @@ export function Board({
 
   const addImages = useCallback(
     async (files: File[], worldX: number, worldY: number) => {
-      let added = 0;
+      let placed: string | null = null;
       for (const [index, file] of files.entries()) {
         try {
           const { src, ratio } = await importImage(file);
-          addImageElement(
+          placed = addImageElement(
             doc,
             localClientId,
             worldX + index * 28,
@@ -302,14 +337,14 @@ export function Board({
             ratio,
           );
           undoManager.stopCapturing();
-          added += 1;
         } catch {
           showToast("That image could not be read");
         }
       }
-      if (added > 0) {
+      if (placed) {
         setTool("select");
-        showToast("Drag the corner to resize · switch to Draw to mark it up");
+        setSelectedId(placed);
+        showToast("Drag to move · corner resizes · ⌫ removes");
       }
     },
     [doc, localClientId, undoManager, showToast],
@@ -325,7 +360,7 @@ export function Board({
 
       const offset = step * 28;
       const [centreX, centreY] = viewportCentre();
-      addImageElement(
+      const id = addImageElement(
         doc,
         localClientId,
         centreX - 140 + offset,
@@ -336,11 +371,21 @@ export function Board({
       undoManager.stopCapturing();
       // The panel covers the middle of the board, which is where photos land.
       setPhoneOpen(false);
-      // No setTool: an arrival must not pull the tool out from under a stroke.
-      showToast("Photo from your phone");
+      setSelectedId(id);
+      // A tool change mid gesture would strand the stroke, so a busy hand keeps its tool.
+      if (!gestureRef.current) setTool("select");
+      showToast("Photo from your phone · drag it where you want it");
     },
     [doc, localClientId, undoManager, showToast, viewportCentre],
   );
+
+  const removeSelected = useCallback(() => {
+    if (!selectedId) return;
+    removeElement(doc, selectedId);
+    undoManager.stopCapturing();
+    setSelectedId(null);
+    showToast("Removed · Undo brings it back");
+  }, [selectedId, doc, undoManager, showToast]);
 
   useEffect(
     () => host.attach({ onState: setCompanion, onImage: acceptPhoto }),
@@ -386,6 +431,8 @@ export function Board({
         if (phoneOpen) {
           event.preventDefault();
           setPhoneOpen(false);
+        } else {
+          setSelectedId(null);
         }
         return;
       }
@@ -411,6 +458,15 @@ export function Board({
         event.ctrlKey
       )
         return;
+      if (
+        canMove &&
+        selectedId &&
+        (event.key === "Delete" || event.key === "Backspace")
+      ) {
+        event.preventDefault();
+        removeSelected();
+        return;
+      }
       const next = shortcutToTool(event.key);
       if (next) setTool(next);
     };
@@ -425,7 +481,7 @@ export function Board({
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
     };
-  }, [undo, undoManager, phoneOpen]);
+  }, [undo, undoManager, phoneOpen, canMove, selectedId, removeSelected]);
 
   const broadcastCursor = useCallback(
     (worldX: number, worldY: number) => {
@@ -447,6 +503,11 @@ export function Board({
           panX: viewRef.current.panX,
           panY: viewRef.current.panY,
         };
+        return;
+      }
+
+      if (tool === "select") {
+        setSelectedId(null);
         return;
       }
 
@@ -509,14 +570,24 @@ export function Board({
             panY: gesture.panY + (event.clientY - gesture.originY),
           }));
           return;
-        case "resize":
+        case "resize": {
+          // The handle rides the element's own axis, so the drag is projected onto it.
+          const radians = (gesture.angle * Math.PI) / 180;
+          const along =
+            (x - gesture.originX) * Math.cos(radians) +
+            (y - gesture.originY) * Math.sin(radians);
           updateElement(doc, gesture.id, {
-            w: Math.max(
-              MIN_ELEMENT_WIDTH,
-              gesture.originWidth + (x - gesture.originX),
-            ),
+            w: Math.max(MIN_ELEMENT_WIDTH, gesture.originWidth + along),
           });
           return;
+        }
+        case "rotate": {
+          const pointed = angleFrom(x - gesture.centreX, y - gesture.centreY);
+          updateElement(doc, gesture.id, {
+            a: snapAngle(pointed - gesture.offset, event.shiftKey),
+          });
+          return;
+        }
         case "drag":
           updateElement(doc, gesture.id, {
             x: x - gesture.offsetX,
@@ -646,95 +717,174 @@ export function Board({
             transformOrigin: "0 0",
           }}
         >
-          {elements.map((element) => (
-            <div
-              key={element.id}
-              onPointerDown={(event) => {
-                if (drawMode) return;
-                event.stopPropagation();
-                if (!canMove) return;
-                const [x, y] = toWorld(event.clientX, event.clientY);
-                gestureRef.current = {
-                  type: "drag",
-                  id: element.id,
-                  offsetX: x - element.x,
-                  offsetY: y - element.y,
-                };
-              }}
-              style={{
-                position: "absolute",
-                left: `${element.x}px`,
-                top: `${element.y}px`,
-                width: `${element.w}px`,
-                // Text mode keeps text boxes clickable so they can be edited,
-                // but pictures must not swallow a click meant to place new text.
-                pointerEvents:
-                  drawMode || (tool === "text" && element.type === "image")
-                    ? "none"
-                    : "auto",
-                cursor: canMove ? "grab" : "default",
-                outline:
-                  element.type === "image" && canMove
-                    ? "1px solid oklch(0.62 0.19 250 / 0.55)"
-                    : undefined,
-                outlineOffset: "2px",
-              }}
-            >
-              {element.type === "text" ? (
-                <TextBox
-                  text={element.text}
-                  color={element.color}
-                  body={textBodyOf(doc, element.id)}
-                  caretCursor={canMove ? "grab" : "text"}
-                  focusOnMount={focusedTextId === element.id}
-                  onBlur={() => pruneEmptyText(doc, element.id)}
-                />
-              ) : (
-                <div
-                  className="rounded-[5px] bg-center bg-cover shadow-art"
-                  style={{
-                    width: "100%",
-                    height: `${element.w / (element.ratio || 1.4)}px`,
-                    backgroundImage: `url("${element.src}")`,
-                  }}
-                />
-              )}
+          {elements.map((element) => {
+            const selected = canMove && selectedId === element.id;
+            return (
+              <div
+                key={element.id}
+                onPointerDown={(event) => {
+                  if (drawMode) return;
+                  event.stopPropagation();
+                  if (!canMove) return;
+                  setSelectedId(element.id);
+                  const [x, y] = toWorld(event.clientX, event.clientY);
+                  gestureRef.current = {
+                    type: "drag",
+                    id: element.id,
+                    offsetX: x - element.x,
+                    offsetY: y - element.y,
+                  };
+                }}
+                style={{
+                  position: "absolute",
+                  left: `${element.x}px`,
+                  top: `${element.y}px`,
+                  width: `${element.w}px`,
+                  // Text mode keeps text boxes clickable so they can be edited,
+                  // but pictures must not swallow a click meant to place new text.
+                  pointerEvents:
+                    drawMode || (tool === "text" && element.type === "image")
+                      ? "none"
+                      : "auto",
+                  cursor: canMove ? "grab" : "default",
+                  transform: element.a ? `rotate(${element.a}deg)` : undefined,
+                  outline: selected
+                    ? "1.5px solid oklch(0.62 0.19 250)"
+                    : element.type === "image" && canMove
+                      ? "1px solid oklch(0.62 0.19 250 / 0.55)"
+                      : undefined,
+                  outlineOffset: "2px",
+                }}
+              >
+                {element.type === "text" ? (
+                  <TextBox
+                    text={element.text}
+                    color={element.color}
+                    body={textBodyOf(doc, element.id)}
+                    caretCursor={canMove ? "grab" : "text"}
+                    focusOnMount={focusedTextId === element.id}
+                    onBlur={() => pruneEmptyText(doc, element.id)}
+                  />
+                ) : (
+                  <div
+                    className="rounded-[5px] bg-center bg-cover shadow-art"
+                    style={{
+                      width: "100%",
+                      height: `${element.w / (element.ratio || 1.4)}px`,
+                      backgroundImage: `url("${element.src}")`,
+                    }}
+                  />
+                )}
 
-              {element.type === "image" && canMove && (
-                <div
-                  onPointerDown={(event) => {
-                    event.stopPropagation();
-                    const [x] = toWorld(event.clientX, event.clientY);
-                    gestureRef.current = {
-                      type: "resize",
-                      id: element.id,
-                      originX: x,
-                      originWidth: element.w,
-                    };
-                  }}
-                  style={{
-                    position: "absolute",
-                    right: `${-7 / view.zoom}px`,
-                    bottom: `${-7 / view.zoom}px`,
-                    width: `${13 / view.zoom}px`,
-                    height: `${13 / view.zoom}px`,
-                    borderRadius: "3px",
-                    background: "#fff",
-                    border: `${1.5 / view.zoom}px solid oklch(0.62 0.19 250)`,
-                    cursor: "nwse-resize",
-                    touchAction: "none",
-                  }}
-                />
-              )}
+                {selected && (
+                  <>
+                    <div
+                      title="Rotate"
+                      onPointerDown={(event) => {
+                        event.stopPropagation();
+                        // Rotating about the centre leaves the bounding box centred on the
+                        // same point, so the wrapper's rect gives the pivot at any angle.
+                        const box =
+                          event.currentTarget.parentElement?.getBoundingClientRect();
+                        if (!box) return;
+                        const [centreX, centreY] = toWorld(
+                          box.left + box.width / 2,
+                          box.top + box.height / 2,
+                        );
+                        const [x, y] = toWorld(event.clientX, event.clientY);
+                        gestureRef.current = {
+                          type: "rotate",
+                          id: element.id,
+                          centreX,
+                          centreY,
+                          offset:
+                            angleFrom(x - centreX, y - centreY) - element.a,
+                        };
+                      }}
+                      style={{
+                        position: "absolute",
+                        left: "50%",
+                        top: `${-27 / view.zoom}px`,
+                        width: `${13 / view.zoom}px`,
+                        height: `${13 / view.zoom}px`,
+                        marginLeft: `${-6.5 / view.zoom}px`,
+                        borderRadius: "50%",
+                        background: "#fff",
+                        border: `${1.5 / view.zoom}px solid oklch(0.62 0.19 250)`,
+                        cursor: "grab",
+                        touchAction: "none",
+                      }}
+                    />
 
-              {element.author !== localClientId && (
-                <div className="absolute -top-[17px] left-0.5 rounded bg-peer px-1.5 py-px text-[10.5px] font-medium text-white">
-                  {authorNames.get(element.author) ??
-                    displayNameFor(element.author)}
-                </div>
-              )}
-            </div>
-          ))}
+                    <button
+                      type="button"
+                      title="Remove"
+                      aria-label="Remove"
+                      onPointerDown={(event) => event.stopPropagation()}
+                      onClick={removeSelected}
+                      style={{
+                        position: "absolute",
+                        right: `${-9 / view.zoom}px`,
+                        top: `${-9 / view.zoom}px`,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: `${18 / view.zoom}px`,
+                        height: `${18 / view.zoom}px`,
+                        padding: 0,
+                        borderRadius: "50%",
+                        background: "#fff",
+                        border: `${1.5 / view.zoom}px solid oklch(0.62 0.19 250)`,
+                        color: "oklch(0.62 0.19 250)",
+                        fontSize: `${13 / view.zoom}px`,
+                        lineHeight: 1,
+                        cursor: "pointer",
+                      }}
+                    >
+                      ×
+                    </button>
+
+                    {element.type === "image" && (
+                      <div
+                        title="Resize"
+                        onPointerDown={(event) => {
+                          event.stopPropagation();
+                          const [x, y] = toWorld(event.clientX, event.clientY);
+                          gestureRef.current = {
+                            type: "resize",
+                            id: element.id,
+                            originX: x,
+                            originY: y,
+                            originWidth: element.w,
+                            angle: element.a,
+                          };
+                        }}
+                        style={{
+                          position: "absolute",
+                          right: `${-7 / view.zoom}px`,
+                          bottom: `${-7 / view.zoom}px`,
+                          width: `${13 / view.zoom}px`,
+                          height: `${13 / view.zoom}px`,
+                          borderRadius: "3px",
+                          background: "#fff",
+                          border: `${1.5 / view.zoom}px solid oklch(0.62 0.19 250)`,
+                          cursor: "nwse-resize",
+                          touchAction: "none",
+                        }}
+                      />
+                    )}
+                  </>
+                )}
+
+                {element.author !== localClientId && (
+                  <div className="absolute -top-[17px] left-0.5 rounded bg-peer px-1.5 py-px text-[10.5px] font-medium text-white">
+                    {authorNames.get(element.author) ??
+                      displayNameFor(element.author)}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
 
         <canvas

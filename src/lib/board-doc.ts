@@ -30,6 +30,8 @@ export type TextElement = {
   x: number;
   y: number;
   w: number;
+  /** Clockwise degrees about the element's centre. */
+  a: number;
   z: number;
   author: number;
   color: string;
@@ -42,6 +44,8 @@ export type ImageElement = {
   x: number;
   y: number;
   w: number;
+  /** Clockwise degrees about the element's centre. */
+  a: number;
   z: number;
   author: number;
   src: string;
@@ -171,6 +175,7 @@ export function readElements(doc: Y.Doc): BoardElement[] {
       x: element.get("x") as number,
       y: element.get("y") as number,
       w: element.get("w") as number,
+      a: (element.get("a") as number | undefined) ?? 0,
       z: (element.get("z") as number | undefined) ?? 0,
       author: (element.get("author") as number | undefined) ?? 0,
     };
@@ -251,7 +256,7 @@ export function addImageElement(
 export function updateElement(
   doc: Y.Doc,
   id: string,
-  patch: Partial<Record<"x" | "y" | "w", number>>,
+  patch: Partial<Record<"x" | "y" | "w" | "a", number>>,
 ): void {
   const element = elementsOf(doc).get(id);
   if (!element) return;
@@ -269,12 +274,14 @@ export function textBodyOf(doc: Y.Doc, id: string): Y.Text | null {
   return (element.get("body") as Y.Text | undefined) ?? null;
 }
 
+export function removeElement(doc: Y.Doc, id: string): void {
+  doc.transact(() => elementsOf(doc).delete(id), LOCAL_ORIGIN);
+}
+
 /** Drops text boxes that were placed but never typed into, so a stray click leaves nothing behind. */
 export function pruneEmptyText(doc: Y.Doc, id: string): void {
   const body = textBodyOf(doc, id);
-  if (body && body.length === 0) {
-    doc.transact(() => elementsOf(doc).delete(id), LOCAL_ORIGIN);
-  }
+  if (body && body.length === 0) removeElement(doc, id);
 }
 
 export function clearBoard(doc: Y.Doc): void {
