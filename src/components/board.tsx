@@ -13,6 +13,7 @@ import {
   duplicateElement,
   elementsOf,
   inkPointCount,
+  isPaintableSrc,
   LOCAL_ORIGIN,
   pruneEmptyText,
   readElements,
@@ -1259,7 +1260,9 @@ export function Board({
                     style={{
                       width: "100%",
                       height: `${element.w / (element.ratio || 1.4)}px`,
-                      backgroundImage: `url("${element.src}")`,
+                      backgroundImage: isPaintableSrc(element.src)
+                        ? `url("${element.src}")`
+                        : undefined,
                     }}
                   />
                 )}

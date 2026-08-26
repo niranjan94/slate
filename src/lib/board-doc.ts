@@ -54,6 +54,15 @@ export type ImageElement = {
 
 export type BoardElement = TextElement | ImageElement;
 
+/**
+ * A picture is painted as a CSS `url("…")`, so a src carrying a quote, a bracket or
+ * whitespace could close that function and add a background layer of its own,
+ * pointing anywhere. Only a plain inline image is painted.
+ */
+export function isPaintableSrc(src: string): boolean {
+  return src.startsWith("data:image/") && !/["'()\s\\]/.test(src);
+}
+
 export type YStroke = Y.Map<unknown>;
 export type YElement = Y.Map<unknown>;
 
