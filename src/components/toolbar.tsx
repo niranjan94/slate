@@ -1,5 +1,6 @@
 "use client";
 
+import { Minus, Plus } from "@phosphor-icons/react";
 import type { ShapeId, ToolId } from "@/lib/board-doc";
 import type { CompanionState } from "@/lib/companion-host";
 import { SHAPES, SWATCHES, TOOLS, WIDTHS } from "@/lib/tools";
@@ -316,12 +317,13 @@ export function Toolbar({
           <button
             type="button"
             title="Zoom out"
+            aria-label="Zoom out"
             onClick={onZoomOut}
-            className={`cursor-pointer rounded-lg text-base text-ink-soft transition-colors hover:bg-hover ${
+            className={`flex cursor-pointer items-center justify-center rounded-lg text-ink-soft transition-colors hover:bg-hover ${
               coarse ? THUMB : "size-7"
             }`}
           >
-            &#8722;
+            <Minus size={15} weight="bold" aria-hidden />
           </button>
           <button
             type="button"
@@ -336,12 +338,13 @@ export function Toolbar({
           <button
             type="button"
             title="Zoom in"
+            aria-label="Zoom in"
             onClick={onZoomIn}
-            className={`cursor-pointer rounded-lg text-base text-ink-soft transition-colors hover:bg-hover ${
+            className={`flex cursor-pointer items-center justify-center rounded-lg text-ink-soft transition-colors hover:bg-hover ${
               coarse ? THUMB : "size-7"
             }`}
           >
-            +
+            <Plus size={15} weight="bold" aria-hidden />
           </button>
         </div>
       </div>

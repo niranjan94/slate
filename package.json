@@ -25,6 +25,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@phosphor-icons/react": "^2.1.10",
     "lib0": "^0.2.117",
     "next": "16.3.2",
     "peerjs": "^1.5.5",

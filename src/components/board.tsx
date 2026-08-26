@@ -1,5 +1,12 @@
 "use client";
 
+import {
+  ArrowUUpLeft,
+  ArrowUUpRight,
+  DotsThree,
+  Question,
+  X,
+} from "@phosphor-icons/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   addImageElement,
@@ -1357,11 +1364,9 @@ export function Board({
                           alignItems: "center",
                           justifyContent: "center",
                           color: "oklch(0.62 0.19 250)",
-                          fontSize: `${13 / view.zoom}px`,
-                          lineHeight: 1,
                         }}
                       >
-                        ×
+                        <X size={13 / view.zoom} weight="bold" aria-hidden />
                       </span>
                     </button>
 
@@ -1450,28 +1455,28 @@ export function Board({
               type="button"
               aria-label="Undo"
               onClick={undo}
-              className="size-10 cursor-pointer rounded-[10px] text-[17px] text-ink-soft"
+              className="flex size-10 cursor-pointer items-center justify-center rounded-[10px] text-ink-soft"
             >
-              &#8617;
+              <ArrowUUpLeft size={18} weight="bold" aria-hidden />
             </button>
             <button
               type="button"
               aria-label="Redo"
               onClick={redo}
-              className="size-10 cursor-pointer rounded-[10px] text-[17px] text-ink-soft"
+              className="flex size-10 cursor-pointer items-center justify-center rounded-[10px] text-ink-soft"
             >
-              &#8618;
+              <ArrowUUpRight size={18} weight="bold" aria-hidden />
             </button>
             <button
               type="button"
               aria-label="More"
               aria-pressed={menuOpen}
               onClick={() => setMenuOpen((open) => !open)}
-              className={`size-10 cursor-pointer rounded-[10px] text-[17px] leading-none ${
+              className={`flex size-10 cursor-pointer items-center justify-center rounded-[10px] ${
                 menuOpen ? "bg-active text-ink" : "text-ink-soft"
               }`}
             >
-              &#8943;
+              <DotsThree size={22} weight="bold" aria-hidden />
             </button>
           </div>
 
@@ -1565,11 +1570,11 @@ export function Board({
               aria-label="Keyboard shortcuts"
               aria-pressed={sheetOpen}
               onClick={() => setSheetOpen((open) => !open)}
-              className={`cursor-pointer rounded-lg text-[13.5px] font-medium transition-colors ${
+              className={`flex cursor-pointer items-center justify-center rounded-lg transition-colors ${
                 coarse ? "size-11" : "size-9"
               } ${sheetOpen ? "bg-active text-ink" : "text-ink-soft hover:bg-hover"}`}
             >
-              ?
+              <Question size={17} weight="bold" aria-hidden />
             </button>
           </div>
         </>

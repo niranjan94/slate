@@ -1,5 +1,6 @@
 "use client";
 
+import { ArrowElbowDownLeft } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -65,7 +66,12 @@ export function Lobby() {
             className="flex w-full cursor-pointer items-center justify-between gap-3 rounded-xl bg-ink px-[18px] py-[15px] text-[15px] font-medium text-ink-invert transition hover:-translate-y-px hover:bg-black"
           >
             <span>Start a new board</span>
-            <span className="text-xs opacity-55">&#8629;</span>
+            <ArrowElbowDownLeft
+              size={15}
+              weight="bold"
+              aria-hidden
+              className="opacity-55"
+            />
           </button>
 
           <div className="flex items-center gap-3 py-1">
