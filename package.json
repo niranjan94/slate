@@ -18,6 +18,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "biome check",
+    "typecheck": "next typegen && tsc --noEmit",
     "format": "biome format --write",
     "test": "vitest run",
     "test:watch": "vitest",

@@ -1,5 +1,7 @@
 # slate
 
+[![CI](https://github.com/niranjan94/slate/actions/workflows/ci.yml/badge.svg)](https://github.com/niranjan94/slate/actions/workflows/ci.yml)
+
 A shared whiteboard for two, in the browser. Draw, erase, place text and drop in
 pictures; everything you do appears on the other person's board as you do it.
 Photograph something on your desk and it lands on the board, by pairing a phone
@@ -46,6 +48,7 @@ Backspace takes it off the board. Undo and Redo sit in the top right and answer
 | `pnpm build` | Production build |
 | `pnpm start` | Serve the production build |
 | `pnpm lint` | Biome lint and format check |
+| `pnpm typecheck` | Route typegen and TypeScript check |
 | `pnpm format` | Biome format, writing changes |
 | `pnpm test` | Unit tests |
 | `pnpm test:e2e` | Browser tests |
@@ -68,6 +71,11 @@ Phone pairing is the only peer to peer path the suite covers, and it covers it
 because both ends are Chromium pages in one browser. Two people on one board
 still needs a relay, a live broker and two engines, so that stays a manual check
 before deploying.
+
+GitHub Actions runs the lint, type and unit checks alongside the browser suite
+on every push to `main` and every pull request, and keeps the traces from a
+failed browser run as an artifact. The two specs that need the broker run there
+as well, so an unreachable broker fails the run.
 
 ## The site URL
 
