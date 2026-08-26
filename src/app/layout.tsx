@@ -15,12 +15,12 @@ const outfit = Outfit({
   weight: ["300", "400", "500", "600"],
 });
 
-const title = `${SITE_NAME}, ${SITE_TAGLINE.toLowerCase()}`;
+const socialTitle = `${SITE_NAME}, ${SITE_TAGLINE.toLowerCase()}`;
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: title,
+    default: SITE_NAME,
     template: `%s | ${SITE_NAME}`,
   },
   description: SITE_DESCRIPTION,
@@ -46,14 +46,14 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     siteName: SITE_NAME,
-    title,
+    title: socialTitle,
     description: SITE_DESCRIPTION,
     url: "/",
     locale: "en_US",
   },
   twitter: {
     card: "summary_large_image",
-    title,
+    title: socialTitle,
     description: SITE_DESCRIPTION,
   },
   robots: {
