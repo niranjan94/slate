@@ -204,12 +204,15 @@ export class PeerLink {
       conn.close();
       return;
     }
+    const previous = this.conn;
     // Boards hold two. A third arrival is turned away rather than silently ignored.
-    if (this.conn && this.conn !== conn && this.conn.open) {
+    if (previous && previous !== conn && previous.open) {
       conn.close();
       return;
     }
     this.conn = conn;
+    // A dial still waiting to answer is given up rather than left dangling.
+    if (previous && previous !== conn) previous.close();
 
     conn.on("open", () => {
       if (this.disposed || this.conn !== conn) return;
