@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   boardPath,
   generateRoomCode,
@@ -14,7 +14,6 @@ export function Lobby() {
   const router = useRouter();
   const [joinCode, setJoinCode] = useState("");
   const [error, setError] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
 
   const create = useCallback(() => {
     router.push(boardPath(generateRoomCode()));
@@ -32,7 +31,10 @@ export function Lobby() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Enter") return;
-      if (document.activeElement === inputRef.current) return;
+      // Enter on a focused control already fires that control, and starting a
+      // board here as well would navigate twice, to two different places.
+      const tag = (document.activeElement as HTMLElement | null)?.tagName;
+      if (tag === "BUTTON" || tag === "INPUT" || tag === "A") return;
       create();
     };
     window.addEventListener("keydown", onKeyDown);
@@ -76,7 +78,6 @@ export function Lobby() {
 
           <div className="flex gap-2">
             <input
-              ref={inputRef}
               value={joinCode}
               onChange={(event) => {
                 setJoinCode(normalizeRoomCode(event.target.value));
