@@ -48,6 +48,18 @@ the broker was unreachable rather than the board being broken.
 Neither suite covers two browsers talking to each other. That needs a relay, a
 live broker and two engines, so it stays a manual check before deploying.
 
+## The site URL
+
+Canonical links, the social image, `robots.txt` and `sitemap.xml` all need an absolute address, and only the deployment knows what it is. Point `NEXT_PUBLIC_SITE_URL` at the origin the boards are served from:
+
+```bash
+NEXT_PUBLIC_SITE_URL=https://slate.example.com
+```
+
+It falls back to `http://localhost:3000`, and like the ICE server list it is read at build time, so a deployment has to be rebuilt after changing it.
+
+Boards under `/b/` carry `noindex` and are excluded from `robots.txt`: a room code is the invitation to a board, so it has no business in a search index.
+
 ## Connecting through a relay
 
 Two browsers can only talk directly when the network lets them. Boards ship with
@@ -88,6 +100,6 @@ which is worth knowing given the rest of a board never touches a server.
 
 | Path | Holds |
 | --- | --- |
-| `src/app` | Routes: the lobby at `/` and a board at `/b/[code]` |
+| `src/app` | Routes: the lobby at `/`, a board at `/b/[code]`, and the generated icons, social image, `robots.txt`, `sitemap.xml` and web manifest |
 | `src/components` | Board surface, toolbar, lobby and overlays |
-| `src/lib` | Document model, canvas painting, peer link and room codes |
+| `src/lib` | Document model, canvas painting, peer link, room codes and the logo mark |
