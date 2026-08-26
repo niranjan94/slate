@@ -68,6 +68,35 @@ function counterOf(doc: Y.Doc): Y.Map<number> {
   return doc.getMap<number>("counter");
 }
 
+function namesOf(doc: Y.Doc): Y.Map<string> {
+  return doc.getMap<string>("names");
+}
+
+/**
+ * Author labels have to survive a reload and a peer going away, so the chosen
+ * name is kept in the doc rather than only in awareness.
+ */
+export function publishName(doc: Y.Doc, clientId: number, name: string): void {
+  doc.transact(() => {
+    namesOf(doc).set(String(clientId), name);
+  }, LOCAL_ORIGIN);
+}
+
+export function readNames(doc: Y.Doc): Map<number, string> {
+  const names = new Map<number, string>();
+  for (const [key, name] of namesOf(doc).entries()) {
+    const clientId = Number(key);
+    if (Number.isFinite(clientId) && name) names.set(clientId, name);
+  }
+  return names;
+}
+
+export function observeNames(doc: Y.Doc, listener: () => void): () => void {
+  const names = namesOf(doc);
+  names.observe(listener);
+  return () => names.unobserve(listener);
+}
+
 /**
  * Ink points live in a Y.Array so a stroke in progress syncs point-by-point
  * instead of resending the whole path on every move.

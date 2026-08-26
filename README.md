@@ -18,6 +18,10 @@ pnpm dev
 Open `/`, start a board, and send the link or the five character room code to
 one other person. Boards hold two.
 
+Everyone arrives under a generated name and can change it, in the panel that
+covers a new board or from the chip in the top left. The name is kept in this
+browser and carries across boards.
+
 | Script | Does |
 | --- | --- |
 | `pnpm dev` | Development server |

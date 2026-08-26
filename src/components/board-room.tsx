@@ -4,7 +4,7 @@ import { useBoardRoom } from "@/lib/use-board-room";
 import { Board } from "./board";
 
 export function BoardRoomView({ code }: { code: string }) {
-  const { room, status, peers } = useBoardRoom(code);
+  const { room, status, peers, localName, rename } = useBoardRoom(code);
 
   if (!room) {
     return (
@@ -19,5 +19,14 @@ export function BoardRoomView({ code }: { code: string }) {
     );
   }
 
-  return <Board code={code} room={room} status={status} peers={peers} />;
+  return (
+    <Board
+      code={code}
+      room={room}
+      status={status}
+      peers={peers}
+      localName={localName}
+      onRename={rename}
+    />
+  );
 }

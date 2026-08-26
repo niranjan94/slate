@@ -2,10 +2,13 @@
 
 import Link from "next/link";
 import type { LinkStatus } from "@/lib/peer-link";
+import { NameInput } from "./name-field";
 
 type RoomGateProps = {
   status: LinkStatus;
   code: string;
+  localName: string;
+  onRename: (name: string) => void;
   onCopy: () => void;
   onDismiss: () => void;
 };
@@ -28,7 +31,14 @@ function Shell({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function RoomGate({ status, code, onCopy, onDismiss }: RoomGateProps) {
+export function RoomGate({
+  status,
+  code,
+  localName,
+  onRename,
+  onCopy,
+  onDismiss,
+}: RoomGateProps) {
   if (status === "full") {
     return (
       <Shell>
@@ -66,10 +76,12 @@ export function RoomGate({ status, code, onCopy, onDismiss }: RoomGateProps) {
 
   return (
     <Shell>
-      <p className="mt-2.5 mb-[26px] max-w-[34ch] text-[14.5px] leading-[1.55] text-ink-muted text-pretty">
+      <p className="mt-2.5 mb-[22px] max-w-[34ch] text-[14.5px] leading-[1.55] text-ink-muted text-pretty">
         A shared whiteboard for two. Draw together in real time over a direct
         browser-to-browser connection.
       </p>
+
+      <NameInput name={localName} onRename={onRename} />
 
       <div className="mb-4 flex items-center gap-2.5">
         <div className="relative size-[9px]">

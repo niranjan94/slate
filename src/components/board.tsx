@@ -34,7 +34,12 @@ import {
   shortcutToTool,
   TOOL_STATUS,
 } from "@/lib/tools";
-import type { BoardRoom, PeerPresence } from "@/lib/use-board-room";
+import {
+  type BoardRoom,
+  type PeerPresence,
+  useAuthorNames,
+} from "@/lib/use-board-room";
+import { NameChip } from "./name-field";
 import { PeerCursors } from "./peer-cursors";
 import { RoomGate } from "./room-gate";
 import { TextBox } from "./text-box";
@@ -63,6 +68,8 @@ type BoardProps = {
   room: BoardRoom;
   status: LinkStatus;
   peers: PeerPresence[];
+  localName: string;
+  onRename: (name: string) => void;
 };
 
 const clampZoom = (zoom: number) =>
@@ -76,8 +83,16 @@ function peerLabel(status: LinkStatus, peers: PeerPresence[]): string {
   return "waiting";
 }
 
-export function Board({ code, room, status, peers }: BoardProps) {
+export function Board({
+  code,
+  room,
+  status,
+  peers,
+  localName,
+  onRename,
+}: BoardProps) {
   const { doc, awareness, undoManager, localClientId } = room;
+  const authorNames = useAuthorNames(doc);
 
   const [tool, setTool] = useState<ToolId>("pen");
   const [shape, setShape] = useState<ShapeId>("rect");
@@ -623,7 +638,8 @@ export function Board({ code, room, status, peers }: BoardProps) {
 
               {element.author !== localClientId && (
                 <div className="absolute -top-[17px] left-0.5 rounded bg-peer px-1.5 py-px text-[10.5px] font-medium text-white">
-                  {displayNameFor(element.author)}
+                  {authorNames.get(element.author) ??
+                    displayNameFor(element.author)}
                 </div>
               )}
             </div>
@@ -675,6 +691,8 @@ export function Board({ code, room, status, peers }: BoardProps) {
             {peerLabel(status, peers)}
           </span>
         </div>
+
+        <NameChip name={localName} onRename={onRename} />
       </div>
 
       <div className="absolute top-[18px] right-[18px] flex items-center gap-1 rounded-xl border border-line bg-panel p-[7px] shadow-panel">
@@ -754,6 +772,8 @@ export function Board({ code, room, status, peers }: BoardProps) {
         <RoomGate
           status={status}
           code={code}
+          localName={localName}
+          onRename={onRename}
           onCopy={copyInvite}
           onDismiss={() => setGateDismissed(true)}
         />

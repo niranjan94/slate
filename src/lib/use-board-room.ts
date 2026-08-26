@@ -1,12 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { IndexeddbPersistence } from "y-indexeddb";
 import { Awareness } from "y-protocols/awareness";
 import * as Y from "yjs";
-import { elementsOf, LOCAL_ORIGIN, strokesOf } from "./board-doc";
+import {
+  elementsOf,
+  LOCAL_ORIGIN,
+  observeNames,
+  publishName,
+  readNames,
+  strokesOf,
+} from "./board-doc";
 import { type LinkStatus, PeerLink } from "./peer-link";
-import { displayNameFor } from "./room";
+import {
+  displayNameFor,
+  readStoredName,
+  sanitizeName,
+  storeName,
+} from "./room";
 
 export type PeerCursor = { x: number; y: number };
 
@@ -21,7 +33,6 @@ export type BoardRoom = {
   awareness: Awareness;
   undoManager: Y.UndoManager;
   localClientId: number;
-  localName: string;
 };
 
 export type BoardRoomState = {
@@ -29,6 +40,8 @@ export type BoardRoomState = {
   status: LinkStatus;
   peers: PeerPresence[];
   hydrated: boolean;
+  localName: string;
+  rename: (name: string) => void;
 };
 
 /**
@@ -63,6 +76,7 @@ export function useBoardRoom(code: string): BoardRoomState {
   const [status, setStatus] = useState<LinkStatus>("connecting");
   const [peers, setPeers] = useState<PeerPresence[]>([]);
   const [hydrated, setHydrated] = useState(false);
+  const [localName, setLocalName] = useState("");
 
   useEffect(() => {
     const doc = new Y.Doc();
@@ -72,8 +86,11 @@ export function useBoardRoom(code: string): BoardRoomState {
       trackedOrigins: new Set([LOCAL_ORIGIN]),
       captureTimeout: UNDO_CAPTURE_MS,
     });
-    const localName = displayNameFor(doc.clientID);
-    awareness.setLocalStateField("user", { name: localName });
+
+    const name = readStoredName() || displayNameFor(doc.clientID);
+    awareness.setLocalStateField("user", { name });
+    publishName(doc, doc.clientID, name);
+    setLocalName(name);
 
     const syncRoster = () => {
       const next = rosterOf(awareness, doc.clientID);
@@ -95,7 +112,6 @@ export function useBoardRoom(code: string): BoardRoomState {
       awareness,
       undoManager,
       localClientId: doc.clientID,
-      localName,
     });
 
     return () => {
@@ -114,7 +130,21 @@ export function useBoardRoom(code: string): BoardRoomState {
     };
   }, [code]);
 
-  return { room, status, peers, hydrated };
+  /** An empty name is not an error, it just hands the person back a generated one. */
+  const rename = useCallback(
+    (raw: string) => {
+      if (!room) return;
+      const chosen = sanitizeName(raw).trim();
+      const next = chosen || displayNameFor(room.localClientId);
+      storeName(chosen);
+      room.awareness.setLocalStateField("user", { name: next });
+      publishName(room.doc, room.localClientId, next);
+      setLocalName(next);
+    },
+    [room],
+  );
+
+  return { room, status, peers, hydrated, localName, rename };
 }
 
 /**
@@ -149,4 +179,17 @@ export function usePeerCursors(
   }, [awareness, localClientId]);
 
   return cursors;
+}
+
+/** Content outlives presence, so author labels resolve through the doc rather than awareness. */
+export function useAuthorNames(doc: Y.Doc): Map<number, string> {
+  const [names, setNames] = useState<Map<number, string>>(() => new Map());
+
+  useEffect(() => {
+    const sync = () => setNames(readNames(doc));
+    sync();
+    return observeNames(doc, sync);
+  }, [doc]);
+
+  return names;
 }

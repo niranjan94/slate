@@ -73,3 +73,30 @@ const DISPLAY_NAMES = [
 export function displayNameFor(clientId: number): string {
   return DISPLAY_NAMES[clientId % DISPLAY_NAMES.length];
 }
+
+const NAME_STORAGE_KEY = "slate-name";
+
+export const MAX_NAME_LENGTH = 18;
+
+/** Keeps a typed name to one line so it still fits a cursor label and a roster chip. */
+export function sanitizeName(raw: string): string {
+  return raw.replace(/\s+/g, " ").trimStart().slice(0, MAX_NAME_LENGTH);
+}
+
+/** The chosen name follows the person across boards, so it lives outside the per-room doc. */
+export function readStoredName(): string {
+  try {
+    return sanitizeName(localStorage.getItem(NAME_STORAGE_KEY) ?? "").trim();
+  } catch {
+    return "";
+  }
+}
+
+export function storeName(name: string): void {
+  try {
+    if (name) localStorage.setItem(NAME_STORAGE_KEY, name);
+    else localStorage.removeItem(NAME_STORAGE_KEY);
+  } catch {
+    return;
+  }
+}
