@@ -101,11 +101,10 @@ export class PeerLink {
     if (this.disposed) return;
     this.setStatus(this.everConnected ? "reconnecting" : "connecting");
 
-    const config = peerConfig();
-    const peer = new Peer(
-      peerSlotId(this.code, slot),
-      config ? { debug: 0, config } : { debug: 0 },
-    );
+    const peer = new Peer(peerSlotId(this.code, slot), {
+      debug: 0,
+      config: peerConfig(),
+    });
     this.peer = peer;
 
     peer.on("open", () => {

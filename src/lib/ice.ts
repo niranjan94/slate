@@ -1,13 +1,15 @@
 type PeerRtcConfig = RTCConfiguration & { sdpSemantics?: string };
 
-/** PeerJS's own defaults, kept underneath anything supplied through the environment. */
-const DEFAULT_ICE_SERVERS: RTCIceServer[] = [
-  { urls: "stun:stun.l.google.com:19302" },
+/**
+ * PeerJS ships its own defaults, but its TURN hosts (eu-0/us-0.turn.peerjs.com)
+ * no longer resolve, so every candidate gathering wastes time on a DNS failure.
+ * These STUN servers are reachable and replace that baseline.
+ */
+const BASE_ICE_SERVERS: RTCIceServer[] = [
   {
-    urls: ["turn:eu-0.turn.peerjs.com:3478", "turn:us-0.turn.peerjs.com:3478"],
-    username: "peerjs",
-    credential: "peerjsp",
+    urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"],
   },
+  { urls: "stun:stun.cloudflare.com:3478" },
 ];
 
 function parseIceServers(raw: string | undefined): RTCIceServer[] {
@@ -25,17 +27,17 @@ function parseIceServers(raw: string | undefined): RTCIceServer[] {
 }
 
 /**
- * Two browsers that cannot open a direct path to each other need a relay, which
- * is the usual reason a board stays stuck on "waiting" between different
- * browsers or across restrictive networks. Supply one as a JSON array of
- * RTCIceServer entries in NEXT_PUBLIC_ICE_SERVERS. Returns undefined when
- * nothing is configured, which leaves PeerJS on its own defaults.
+ * STUN alone only works when the two browsers can open a direct path. Different
+ * browser engines on one machine, and strict NATs, need a TURN relay: supply one
+ * as a JSON array of RTCIceServer entries in NEXT_PUBLIC_ICE_SERVERS and it is
+ * appended to the servers below.
  */
-export function peerConfig(): PeerRtcConfig | undefined {
-  const configured = parseIceServers(process.env.NEXT_PUBLIC_ICE_SERVERS);
-  if (configured.length === 0) return undefined;
+export function peerConfig(): PeerRtcConfig {
   return {
-    iceServers: [...DEFAULT_ICE_SERVERS, ...configured],
+    iceServers: [
+      ...BASE_ICE_SERVERS,
+      ...parseIceServers(process.env.NEXT_PUBLIC_ICE_SERVERS),
+    ],
     sdpSemantics: "unified-plan",
   };
 }

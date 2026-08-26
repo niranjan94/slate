@@ -28,23 +28,28 @@ one other person. Boards hold two.
 
 ## Connecting through a relay
 
-Two browsers can only talk directly when the network lets them. Between
-different browser engines, behind strict NATs, or on networks that block
-peer-to-peer UDP, the direct path fails and a board sits on "waiting for someone
-to join" forever.
+Two browsers can only talk directly when the network lets them. Boards ship with
+public STUN servers, which is enough whenever a direct path exists, including
+two tabs of the same browser and most connections between different networks.
 
-The fix is a TURN relay. Set `NEXT_PUBLIC_ICE_SERVERS` to a JSON array of
+STUN is not always enough. Two different browser engines on one machine, and
+strict or symmetric NATs, cannot open a direct path at all. Those cases need a
+TURN relay, and without one the board sits on "waiting for someone to join".
+
+There is no usable credential-free public TURN service, so a relay means
+bringing your own: a TURN add-on from Cloudflare, Metered, Twilio or similar, or
+self-hosted [coturn](https://github.com/coturn/coturn). Point
+`NEXT_PUBLIC_ICE_SERVERS` at it as a JSON array of
 [`RTCIceServer`](https://developer.mozilla.org/docs/Web/API/RTCIceServer)
-entries and they are added to the ICE configuration:
+entries and they are added to the built-in servers:
 
 ```bash
 NEXT_PUBLIC_ICE_SERVERS='[{"urls":"turn:turn.example.com:3478","username":"user","credential":"secret"}]'
 ```
 
-Any TURN provider works, hosted or self-run. Leave the variable unset and PeerJS
-falls back to its own defaults, which are enough whenever a direct connection is
-possible. Note that relayed traffic passes through whichever server you point
-this at.
+The value is read at build time, so a deployment has to be rebuilt after
+changing it. Relayed traffic passes through whichever server you point this at,
+which is worth knowing given the rest of a board never touches a server.
 
 ## Layout
 
