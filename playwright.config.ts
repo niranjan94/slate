@@ -5,17 +5,21 @@ const BASE_URL = `http://localhost:${PORT}`;
 
 export default defineConfig({
   testDir: "tests/e2e",
-  // The suite drives one shared relay network and one IndexedDB origin, so
-  // parallel workers would have the boards stepping on each other.
-  workers: 1,
-  fullyParallel: false,
   /**
    * A board page holds five WebSocket connections to Nostr relays, and Chromium
    * stalls the first navigation of the next context by around 21 seconds once
-   * one closes still holding them. It is a harness effect rather than anything
-   * a person hits, but it eats most of the default budget, so every test is
-   * given room for it.
+   * one closes still holding them. Nothing a person meets, since it takes a
+   * whole browser context torn down and rebuilt, but it dominates a run, which
+   * is what the unusually long per test budget below is for.
+   *
+   * That stall is per browser, so workers wait through it alongside each other
+   * rather than in turn. Kept to a handful rather than the core count, because
+   * each worker opens its own five connections to relays that owe this suite
+   * nothing. Boards no longer contend for a namespace: every test draws its own
+   * random room code, and IndexedDB has always been per context.
    */
+  workers: 4,
+  fullyParallel: true,
   timeout: 60_000,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
