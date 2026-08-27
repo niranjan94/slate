@@ -18,6 +18,13 @@ test.describe("lobby", () => {
     ).toBeVisible();
   });
 
+  test("links to the source", async ({ page }) => {
+    await expect(page.getByRole("link", { name: "Source" })).toHaveAttribute(
+      "href",
+      "https://github.com/niranjan94/slate",
+    );
+  });
+
   test("does not claim boards are stored nowhere", async ({ page }) => {
     await expect(page.locator("body")).not.toContainText(
       "nothing is stored on a server",

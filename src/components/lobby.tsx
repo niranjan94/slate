@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowElbowDownLeft } from "@phosphor-icons/react";
+import { ArrowElbowDownLeft, GithubLogo } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -109,9 +109,18 @@ export function Lobby() {
 
         <p className="mt-[18px] h-4 text-[13px] text-peer">{error}</p>
 
-        <p className="text-[11.5px] text-ink-ghost">
-          Powered by Trystero and WebRTC.
-        </p>
+        <div className="flex items-center justify-between gap-3 text-[11.5px] text-ink-ghost">
+          <span>Powered by Trystero and WebRTC.</span>
+          <a
+            href="https://github.com/niranjan94/slate"
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-1.5 transition-colors hover:text-ink-muted"
+          >
+            <GithubLogo size={13} weight="fill" aria-hidden />
+            <span>Source</span>
+          </a>
+        </div>
       </div>
     </div>
   );
