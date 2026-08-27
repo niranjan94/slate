@@ -28,10 +28,16 @@ export function isValidCompanionNonce(raw: string): boolean {
   return NONCE_PATTERN.test(raw);
 }
 
-/** Addressed by nonce alone, so the pairing survives the room slot changing hands. */
-export function companionPeerId(nonce: string): string {
-  return `${PEER_NAMESPACE}-cam-${nonce}`;
-}
+/**
+ * The nonce is the room itself, so pairing outlives any one board tab.
+ *
+ * Deliberately the same app id the boards use: Trystero derives its relay set
+ * from the app id of the first room a page joins and reuses those relays for
+ * every room after it, so a board tab opening a second app id would wait for
+ * its phone on relays that phone never connects to. Nonces and board codes
+ * cannot collide, so one app id is enough to hold both apart.
+ */
+export const COMPANION_APP_ID = PEER_NAMESPACE;
 
 export function addPath(nonce: string): string {
   return `/add/${nonce}`;
@@ -61,6 +67,20 @@ export function storeCompanionNonce(code: string, nonce: string): void {
   }
 }
 
+export type Role = "host" | "phone";
+
+/**
+ * Everyone in a nonce room announces what they are on arrival. Phones need it
+ * to tell a board apart from a second board tab holding the same nonce, and
+ * boards need it to hand that tie to exactly one of them.
+ */
+export type JoinMessage = {
+  v: number;
+  kind: "join";
+  role: Role;
+  id: string;
+};
+
 export type HelloMessage = {
   v: number;
   kind: "hello";
@@ -86,7 +106,15 @@ export type AckMessage = {
   reason?: AckReason;
 };
 
-export type CompanionMessage = HelloMessage | ImageMessage | AckMessage;
+export type CompanionMessage =
+  | JoinMessage
+  | HelloMessage
+  | ImageMessage
+  | AckMessage;
+
+export function join(role: Role, id: string): JoinMessage {
+  return { v: COMPANION_VERSION, kind: "join", role, id };
+}
 
 export function hello(code: string, name: string): HelloMessage {
   return { v: COMPANION_VERSION, kind: "hello", code, name };
@@ -113,6 +141,12 @@ export function parseCompanionMessage(data: unknown): CompanionMessage | null {
   if (typeof data !== "object" || data === null) return null;
   const message = data as Record<string, unknown>;
   if (message.v !== COMPANION_VERSION) return null;
+
+  if (message.kind === "join") {
+    if (message.role !== "host" && message.role !== "phone") return null;
+    if (typeof message.id !== "string") return null;
+    return join(message.role, message.id);
+  }
 
   if (message.kind === "hello") {
     if (typeof message.code !== "string" || typeof message.name !== "string") {

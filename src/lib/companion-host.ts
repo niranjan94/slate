@@ -1,26 +1,23 @@
-import Peer, { type DataConnection } from "peerjs";
+import { joinRoom, type MessageAction, type Room, selfId } from "trystero";
 import {
   ack,
-  companionPeerId,
+  COMPANION_APP_ID,
+  type CompanionMessage,
   companionUrl,
   generateCompanionNonce,
   hello,
+  join,
   MAX_IMAGE_SRC_LENGTH,
   parseCompanionMessage,
   readCompanionNonce,
   storeCompanionNonce,
 } from "./companion";
-import { peerConfig } from "./ice";
+import { turnServers } from "./ice";
 import type { ImportedImage } from "./image-import";
 
-/**
- * A peer this tab itself just destroyed can hold its id on the broker for a moment, so
- * the first collision is retried rather than treated as another tab owning the nonce.
- * Waiting costs a beat of "opening"; guessing wrong invalidates a QR already scanned.
- */
-const ID_GRACE_MS = 900;
 /** Enough to outlive a phone retransmitting after an ack that never arrived. */
 const SEEN_LIMIT = 32;
+const MESSAGE_ACTION = "msg";
 
 export type CompanionStatus =
   | "off"
@@ -41,20 +38,18 @@ export type CompanionSink = {
   onImage: (image: ImportedImage) => void;
 };
 
-type Timer = ReturnType<typeof setTimeout>;
-
 /**
  * Accepts photos from phones paired to this tab and hands them to the board.
  *
- * The phone is not a room member: it dials a nonce addressed peer that exists
- * alongside the room slot, so `PeerLink` and the two seat limit are untouched. Several
- * phones may be connected at once, since one phone reconnecting looks the same.
+ * The phone is not a board member: the nonce is a room of its own, so nothing
+ * here touches `PeerLink`. Several phones may be connected at once, since one
+ * phone reconnecting looks the same as a second arriving.
  */
 export class CompanionHost {
-  private peer: Peer | null = null;
-  private conns = new Set<DataConnection>();
+  private room: Room | null = null;
+  private messages: MessageAction<CompanionMessage> | null = null;
+  private phones = new Set<string>();
   private sinks = new Set<CompanionSink>();
-  private timers = new Set<Timer>();
   private seen: string[] = [];
   private nonce = "";
   private status: CompanionStatus = "off";
@@ -63,22 +58,17 @@ export class CompanionHost {
 
   constructor(private readonly code: string) {}
 
-  /** Opens the companion peer once. Safe to call from a click on every panel open. */
+  /** Opens the companion room once. Safe to call from a click on every panel open. */
   start(): void {
-    if (this.disposed || this.peer) return;
-    this.claim(readCompanionNonce(this.code) ?? generateCompanionNonce(), true);
+    if (this.disposed || this.room) return;
+    this.open(readCompanionNonce(this.code) ?? generateCompanionNonce());
   }
 
   /** Retires the current link: every paired phone is dropped and the QR is repainted. */
   revoke(): void {
     if (this.disposed) return;
-    this.dropConnections();
-    this.teardownPeer();
     this.seen = [];
-    // Cleared before the new peer opens, so the panel stops offering a QR that
-    // no longer answers.
-    this.nonce = "";
-    this.claim(generateCompanionNonce(), true);
+    this.rotate();
   }
 
   attach(sink: CompanionSink): () => void {
@@ -95,11 +85,9 @@ export class CompanionHost {
 
   destroy(): void {
     this.disposed = true;
-    for (const timer of this.timers) clearTimeout(timer);
-    this.timers.clear();
     this.sinks.clear();
-    this.dropConnections();
-    this.teardownPeer();
+    this.phones.clear();
+    this.leaveRoom();
   }
 
   private state(): CompanionState {
@@ -107,7 +95,7 @@ export class CompanionHost {
       status: this.status,
       nonce: this.nonce,
       url: this.nonce ? companionUrl(this.nonce) : "",
-      phones: this.conns.size,
+      phones: this.phones.size,
     };
   }
 
@@ -123,131 +111,81 @@ export class CompanionHost {
     this.publish();
   }
 
-  private later(fn: () => void, ms: number): void {
-    const timer = setTimeout(() => {
-      this.timers.delete(timer);
-      if (!this.disposed) fn();
-    }, ms);
-    this.timers.add(timer);
+  private leaveRoom(): void {
+    const room = this.room;
+    this.room = null;
+    this.messages = null;
+    void room?.leave();
   }
 
-  private teardownPeer(): void {
-    const peer = this.peer;
-    this.peer = null;
-    peer?.destroy();
-  }
-
-  private dropConnections(): void {
-    for (const conn of this.conns) conn.close();
-    this.conns.clear();
-  }
-
-  private claim(nonce: string, graceRetry: boolean): void {
+  private open(nonce: string): void {
     if (this.disposed) return;
     this.setStatus("opening");
 
-    const peer = new Peer(companionPeerId(nonce), {
-      debug: 0,
-      config: peerConfig(),
-    });
-    this.peer = peer;
+    const room = joinRoom(
+      { appId: COMPANION_APP_ID, turnConfig: turnServers() },
+      nonce,
+      {
+        onJoinError: () => {
+          if (this.disposed || this.room !== room) return;
+          if (this.phones.size === 0) this.setStatus("error");
+        },
+      },
+    );
+    this.room = room;
+    this.messages = room.makeAction<CompanionMessage>(MESSAGE_ACTION);
+    this.messages.onMessage = (data, { peerId }) => this.receive(peerId, data);
 
-    peer.on("open", () => {
-      if (this.disposed || this.peer !== peer) {
-        peer.destroy();
-        return;
-      }
-      // Only a nonce this tab actually holds is remembered, so a tab that lost the
-      // race cannot leave the winner's stored nonce pointing at a taken id.
-      this.nonce = nonce;
-      storeCompanionNonce(this.code, nonce);
-      this.status = "listening";
+    room.onPeerJoin = (peerId) => {
+      if (this.disposed || this.room !== room) return;
+      this.send(peerId, join("host", selfId));
+    };
+
+    room.onPeerLeave = (peerId) => {
+      if (this.disposed || this.room !== room) return;
+      if (!this.phones.delete(peerId)) return;
+      this.status = this.phones.size > 0 ? "linked" : "listening";
       this.publish();
-    });
+    };
 
-    peer.on("connection", (conn) => this.adopt(conn));
-
-    peer.on("disconnected", () => {
-      if (this.disposed || this.peer !== peer || peer.destroyed) return;
-      try {
-        peer.reconnect();
-      } catch {
-        this.later(() => this.restart(), 2000);
-      }
-    });
-
-    peer.on("error", (error) => {
-      if (this.disposed || this.peer !== peer) return;
-      this.handlePeerError(peer, nonce, graceRetry, error.type);
-    });
-  }
-
-  private handlePeerError(
-    peer: Peer,
-    nonce: string,
-    graceRetry: boolean,
-    type: string,
-  ): void {
-    if (type === "unavailable-id") {
-      this.peer = null;
-      peer.destroy();
-      if (graceRetry) this.later(() => this.claim(nonce, false), ID_GRACE_MS);
-      else this.claim(generateCompanionNonce(), true);
-      return;
-    }
-
-    if (type === "browser-incompatible") {
-      this.setStatus("error");
-      return;
-    }
-
-    this.setStatus("error");
-    this.later(() => this.restart(), 2500);
-  }
-
-  private restart(): void {
-    if (this.disposed) return;
-    this.dropConnections();
-    this.teardownPeer();
-    this.claim(this.nonce || generateCompanionNonce(), true);
-  }
-
-  private adopt(conn: DataConnection): void {
-    if (this.disposed) {
-      conn.close();
-      return;
-    }
-    this.conns.add(conn);
-
-    conn.on("open", () => {
-      if (this.disposed || !this.conns.has(conn)) return;
-      this.send(conn, hello(this.code, this.name));
-      this.status = "linked";
-      this.publish();
-    });
-
-    conn.on("data", (data) => {
-      if (this.conns.has(conn)) this.receive(conn, data);
-    });
-
-    conn.on("close", () => this.forget(conn));
-    conn.on("error", () => this.forget(conn));
-  }
-
-  private forget(conn: DataConnection): void {
-    if (!this.conns.delete(conn)) return;
-    if (this.disposed) return;
-    this.status = this.conns.size > 0 ? "linked" : "listening";
+    this.nonce = nonce;
+    storeCompanionNonce(this.code, nonce);
+    this.status = "listening";
     this.publish();
   }
 
-  private send(conn: DataConnection, message: unknown): void {
-    if (!conn.open) return;
-    try {
-      conn.send(message);
-    } catch {
-      // A channel that dies mid-send surfaces through the close handler.
+  private rotate(): void {
+    this.leaveRoom();
+    this.phones.clear();
+    // Cleared before the new room opens, so the panel stops offering a QR that
+    // no longer answers.
+    this.nonce = "";
+    this.open(generateCompanionNonce());
+  }
+
+  /**
+   * Two tabs of one board read the same stored nonce, and both would answer a
+   * QR that has already been scanned, landing every photo twice. Ids settle it
+   * the same way on both sides, and the loser takes a fresh nonce.
+   */
+  private yieldTo(other: string): void {
+    if (this.disposed || selfId <= other) return;
+    this.rotate();
+  }
+
+  private greet(peerId: string): void {
+    if (!this.phones.has(peerId)) {
+      this.phones.add(peerId);
+      this.status = "linked";
+      this.publish();
     }
+    this.send(peerId, hello(this.code, this.name));
+  }
+
+  private send(peerId: string, message: CompanionMessage): void {
+    void this.messages?.send(message, { target: peerId })?.catch(() => {
+      // A channel that dies mid-send surfaces through onPeerLeave.
+    });
   }
 
   private remember(id: string): void {
@@ -255,21 +193,29 @@ export class CompanionHost {
     if (this.seen.length > SEEN_LIMIT) this.seen.shift();
   }
 
-  private receive(conn: DataConnection, data: unknown): void {
+  private receive(peerId: string, data: unknown): void {
     const message = parseCompanionMessage(data);
-    if (message?.kind !== "image") return;
+    if (!message) return;
+
+    if (message.kind === "join") {
+      if (message.role === "host") this.yieldTo(message.id);
+      else this.greet(peerId);
+      return;
+    }
+
+    if (message.kind !== "image") return;
 
     if (message.src.length > MAX_IMAGE_SRC_LENGTH) {
-      this.send(conn, ack(message.id, false, "too-large"));
+      this.send(peerId, ack(message.id, false, "too-large"));
       return;
     }
     // A phone that lost an ack sends again, and the photo is already on the board.
     if (this.seen.includes(message.id)) {
-      this.send(conn, ack(message.id, true));
+      this.send(peerId, ack(message.id, true));
       return;
     }
     if (this.sinks.size === 0) {
-      this.send(conn, ack(message.id, false, "no-board"));
+      this.send(peerId, ack(message.id, false, "no-board"));
       return;
     }
 
@@ -277,7 +223,7 @@ export class CompanionHost {
     for (const sink of this.sinks) {
       sink.onImage({ src: message.src, ratio: message.ratio });
     }
-    this.send(conn, ack(message.id, true));
+    this.send(peerId, ack(message.id, true));
   }
 }
 
@@ -285,14 +231,14 @@ const hosts = new Map<string, CompanionHost>();
 
 /**
  * One host per board per tab, held at module scope on purpose. Strict mode double
- * invokes effects and Fast Refresh remounts the board, and a second peer on the same
- * id is indistinguishable on the broker from a second tab, which would rotate a nonce
- * somebody has already scanned.
+ * invokes effects and Fast Refresh remounts the board, and a second host in the
+ * same nonce room would hand the tie to one of them and rotate a nonce somebody
+ * has already scanned.
  */
 export function companionHostFor(code: string): CompanionHost {
   const existing = hosts.get(code);
   if (existing) return existing;
-  // Navigating between boards must not leave the previous nonce registered.
+  // Navigating between boards must not leave the previous nonce answering.
   for (const [other, host] of hosts) {
     host.destroy();
     hosts.delete(other);

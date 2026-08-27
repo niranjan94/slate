@@ -5,10 +5,18 @@ const BASE_URL = `http://localhost:${PORT}`;
 
 export default defineConfig({
   testDir: "tests/e2e",
-  // The suite drives one shared broker and one IndexedDB origin, so parallel
-  // workers would have the boards stepping on each other.
+  // The suite drives one shared relay network and one IndexedDB origin, so
+  // parallel workers would have the boards stepping on each other.
   workers: 1,
   fullyParallel: false,
+  /**
+   * A board page holds five WebSocket connections to Nostr relays, and Chromium
+   * stalls the first navigation of the next context by around 21 seconds once
+   * one closes still holding them. It is a harness effect rather than anything
+   * a person hits, but it eats most of the default budget, so every test is
+   * given room for it.
+   */
+  timeout: 60_000,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? "list" : [["list"], ["html", { open: "never" }]],

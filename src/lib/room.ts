@@ -1,9 +1,9 @@
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+/** Namespaces this app's rooms on the relay network everyone else shares. */
 export const PEER_NAMESPACE = "slate-wb";
 
 export const ROOM_CODE_LENGTH = 5;
-
-export type Slot = "a" | "b";
 
 /** Generates a room code from the ambiguity-free alphabet the lobby input expects. */
 export function generateRoomCode(): string {
@@ -25,14 +25,6 @@ export function normalizeRoomCode(raw: string): string {
 
 export function isValidRoomCode(code: string): boolean {
   return code.length === ROOM_CODE_LENGTH;
-}
-
-/**
- * Both peers race for slot `a` on the broker; the loser takes `b` and dials `a`.
- * Keeping the namespace long makes a collision on the public broker unlikely.
- */
-export function peerSlotId(code: string, slot: Slot): string {
-  return `${PEER_NAMESPACE}-${code}-${slot}`;
 }
 
 export function boardPath(code: string): string {

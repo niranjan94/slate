@@ -8,7 +8,6 @@ import {
   isValidRoomCode,
   MAX_NAME_LENGTH,
   normalizeRoomCode,
-  peerSlotId,
   ROOM_CODE_LENGTH,
   readStoredName,
   sanitizeName,
@@ -48,20 +47,6 @@ describe("room codes", () => {
   it("rejects a short code", () => {
     expect(isValidRoomCode("ABC")).toBe(false);
     expect(isValidRoomCode("")).toBe(false);
-  });
-});
-
-describe("peer slots", () => {
-  it("gives the two slots of a board different broker ids", () => {
-    expect(peerSlotId("ABCDE", "a")).not.toBe(peerSlotId("ABCDE", "b"));
-  });
-
-  it("keeps separate boards apart", () => {
-    expect(peerSlotId("ABCDE", "a")).not.toBe(peerSlotId("FGHJK", "a"));
-  });
-
-  it("namespaces ids so the shared broker does not collide", () => {
-    expect(peerSlotId("ABCDE", "a")).toContain("slate-wb");
   });
 });
 

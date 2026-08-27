@@ -1,22 +1,24 @@
 "use client";
 
-import Peer, { type DataConnection } from "peerjs";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { joinRoom, selfId } from "trystero";
 import {
   type AckReason,
-  companionPeerId,
+  COMPANION_APP_ID,
+  type CompanionMessage,
   type ImageMessage,
   imageMessage,
+  join,
   MAX_IMAGE_SRC_LENGTH,
   parseCompanionMessage,
 } from "@/lib/companion";
-import { peerConfig } from "@/lib/ice";
+import { turnServers } from "@/lib/ice";
 import { imageFilesFrom, importImage } from "@/lib/image-import";
 
 const ACK_TIMEOUT_MS = 20_000;
-const DIAL_ATTEMPTS = 4;
-const RETRY_STEP_MS = 600;
-const DIAL_TIMEOUT_MS = 6_000;
+/** How long a room with no board answering in it is given before it reads as expired. */
+const HOST_WAIT_MS = 20_000;
+const MESSAGE_ACTION = "msg";
 
 type LinkState = "connecting" | "ready" | "waiting" | "gone" | "error";
 
@@ -66,7 +68,10 @@ export function PhoneSender({ nonce }: { nonce: string }) {
   const [stale, setStale] = useState(false);
   const [items, setItems] = useState<Item[]>([]);
 
-  const connRef = useRef<DataConnection | null>(null);
+  const hostRef = useRef<string | null>(null);
+  const sendRef = useRef<
+    ((message: CompanionMessage) => Promise<void> | null) | null
+  >(null);
   const waitersRef = useRef(
     new Map<string, (ok: boolean, reason?: string) => void>(),
   );
@@ -79,121 +84,88 @@ export function PhoneSender({ nonce }: { nonce: string }) {
   }, []);
 
   useEffect(() => {
+    // Trystero builds an RTCPeerConnection per peer, so a browser without one
+    // never gets as far as looking for the board.
+    if (typeof RTCPeerConnection === "undefined") {
+      setLink("error");
+      return;
+    }
+
     let disposed = false;
-    let attempts = 0;
-    let peer: Peer | null = null;
-    let retryTimer: ReturnType<typeof setTimeout> | null = null;
-    let dialTimer: ReturnType<typeof setTimeout> | null = null;
+    let goneTimer: ReturnType<typeof setTimeout> | null = null;
 
-    const clearDialTimer = () => {
-      if (dialTimer) clearTimeout(dialTimer);
-      dialTimer = null;
-    };
-
-    const teardown = () => {
-      const mine = peer;
-      peer = null;
-      mine?.destroy();
-    };
-
-    const retry = () => {
-      if (disposed || retryTimer) return;
-      clearDialTimer();
-      if (attempts >= DIAL_ATTEMPTS) {
-        teardown();
-        setLink("gone");
-        return;
-      }
-      setLink("waiting");
-      // Armed before the teardown, which closes an open channel and lands back
-      // here through its own close handler.
-      retryTimer = setTimeout(() => {
-        retryTimer = null;
-        open();
-      }, RETRY_STEP_MS * attempts);
-      teardown();
-    };
-
-    const dial = (mine: Peer) => {
-      const conn = mine.connect(companionPeerId(nonce), { reliable: true });
-      // The broker names an unknown id on the first dial and then goes quiet, even for
-      // a fresh peer, so a silent attempt has to be bounded rather than waited on.
-      dialTimer = setTimeout(() => {
-        dialTimer = null;
-        if (!disposed && !conn.open) retry();
-      }, DIAL_TIMEOUT_MS);
-
-      conn.on("open", () => {
-        clearDialTimer();
-        if (disposed || peer !== mine) return;
-        attempts = 0;
-        connRef.current = conn;
-        setLink("ready");
-      });
-
-      conn.on("data", (data) => {
-        const message = parseCompanionMessage(data);
-        if (!message) {
-          // A shaped message this build cannot read means the two sides disagree.
-          if (typeof data === "object" && data !== null && "kind" in data) {
-            setStale(true);
-          }
-          return;
-        }
-        if (message.kind === "hello") {
-          setBoard({ code: message.code, name: message.name });
-          return;
-        }
-        if (message.kind === "ack") {
-          waitersRef.current.get(message.id)?.(message.ok, message.reason);
-        }
-      });
-
-      const lost = () => {
-        if (connRef.current === conn) connRef.current = null;
-        if (!disposed) retry();
-      };
-      conn.on("close", lost);
-      conn.on("error", lost);
+    const clearGoneTimer = () => {
+      if (goneTimer) clearTimeout(goneTimer);
+      goneTimer = null;
     };
 
     /**
-     * A fresh peer per attempt on purpose: PeerJS reports an unknown id only on the
-     * first dial of a given peer and stays silent afterwards, so reusing one leaves
-     * every later attempt waiting for an error that never arrives.
+     * Nothing tells a nonce nobody is listening on apart from one whose board is
+     * briefly away, so silence is given a deadline rather than waited on.
      */
-    const open = () => {
-      if (disposed) return;
-      attempts += 1;
-      const mine = new Peer({ debug: 0, config: peerConfig() });
-      peer = mine;
-
-      mine.on("open", () => {
-        if (disposed || peer !== mine) {
-          mine.destroy();
-          return;
-        }
-        dial(mine);
-      });
-
-      mine.on("error", (error) => {
-        if (disposed || peer !== mine) return;
-        if (error.type === "browser-incompatible") {
-          setLink("error");
-          return;
-        }
-        retry();
-      });
+    const armGoneTimer = () => {
+      clearGoneTimer();
+      goneTimer = setTimeout(() => {
+        goneTimer = null;
+        if (!disposed) setLink("gone");
+      }, HOST_WAIT_MS);
     };
 
-    open();
+    const room = joinRoom(
+      { appId: COMPANION_APP_ID, turnConfig: turnServers() },
+      nonce,
+    );
+    const messages = room.makeAction<CompanionMessage>(MESSAGE_ACTION);
+
+    sendRef.current = (message) => {
+      const host = hostRef.current;
+      return host ? messages.send(message, { target: host }) : null;
+    };
+
+    messages.onMessage = (data, { peerId }) => {
+      const message = parseCompanionMessage(data);
+      if (!message) {
+        // A shaped message this build cannot read means the two sides disagree.
+        if (typeof data === "object" && data !== null && "kind" in data) {
+          setStale(true);
+        }
+        return;
+      }
+      if (message.kind === "join") {
+        if (message.role !== "host") return;
+        hostRef.current = peerId;
+        clearGoneTimer();
+        setLink("ready");
+        return;
+      }
+      if (message.kind === "hello") {
+        setBoard({ code: message.code, name: message.name });
+        return;
+      }
+      if (message.kind === "ack") {
+        waitersRef.current.get(message.id)?.(message.ok, message.reason);
+      }
+    };
+
+    room.onPeerJoin = (peerId) => {
+      void messages.send(join("phone", selfId), { target: peerId });
+    };
+
+    room.onPeerLeave = (peerId) => {
+      if (disposed || hostRef.current !== peerId) return;
+      hostRef.current = null;
+      setLink("waiting");
+      armGoneTimer();
+    };
+
+    armGoneTimer();
 
     return () => {
       disposed = true;
-      if (retryTimer) clearTimeout(retryTimer);
-      clearDialTimer();
-      connRef.current = null;
-      teardown();
+      clearGoneTimer();
+      hostRef.current = null;
+      sendRef.current = null;
+      void room.leave();
     };
   }, [nonce]);
 
@@ -215,14 +187,14 @@ export function PhoneSender({ nonce }: { nonce: string }) {
 
   const deliver = useCallback(
     async (key: string, message: ImageMessage) => {
-      const conn = connRef.current;
-      if (!conn?.open) {
+      const inFlight = sendRef.current?.(message);
+      if (!inFlight) {
         patch(key, { state: "failed", note: "no connection to the board" });
         return;
       }
       patch(key, { state: "sending" });
       try {
-        conn.send(message);
+        await inFlight;
       } catch {
         patch(key, { state: "failed", note: "no connection to the board" });
         return;

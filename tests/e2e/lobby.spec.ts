@@ -13,7 +13,9 @@ test.describe("lobby", () => {
   });
 
   test("credits the transport it actually uses", async ({ page }) => {
-    await expect(page.getByText("Powered by PeerJS and WebRTC.")).toBeVisible();
+    await expect(
+      page.getByText("Powered by Trystero and WebRTC."),
+    ).toBeVisible();
   });
 
   test("does not claim boards are stored nowhere", async ({ page }) => {

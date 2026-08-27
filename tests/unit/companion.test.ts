@@ -3,17 +3,19 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   ack,
   addPath,
+  COMPANION_APP_ID,
   COMPANION_VERSION,
-  companionPeerId,
   companionUrl,
   generateCompanionNonce,
   hello,
   imageMessage,
   isValidCompanionNonce,
+  join,
   parseCompanionMessage,
   readCompanionNonce,
   storeCompanionNonce,
 } from "@/lib/companion";
+import { PEER_NAMESPACE, ROOM_CODE_LENGTH } from "@/lib/room";
 
 const SRC = "data:image/webp;base64,AAAA";
 
@@ -46,8 +48,12 @@ describe("pairing nonces", () => {
 describe("pairing addresses", () => {
   const nonce = "0123456789abcdef01234567";
 
-  it("addresses the companion peer by nonce alone", () => {
-    expect(companionPeerId(nonce)).toBe(`slate-wb-cam-${nonce}`);
+  it("shares the app id boards use, since relays are picked by app id", () => {
+    expect(COMPANION_APP_ID).toBe(PEER_NAMESPACE);
+  });
+
+  it("cannot be mistaken for a board code, which shares that app id", () => {
+    expect(generateCompanionNonce()).not.toHaveLength(ROOM_CODE_LENGTH);
   });
 
   it("keeps the room code out of the phone link", () => {
@@ -86,6 +92,27 @@ describe("messages", () => {
       code: "ABCDE",
       name: "Ada",
     });
+  });
+
+  it("round trips a join and keeps the role it announced", () => {
+    expect(parseCompanionMessage(join("host", "peer-1"))).toEqual({
+      v: COMPANION_VERSION,
+      kind: "join",
+      role: "host",
+      id: "peer-1",
+    });
+    expect(parseCompanionMessage(join("phone", "peer-2"))).toMatchObject({
+      role: "phone",
+    });
+  });
+
+  it("refuses a join that does not say what it is", () => {
+    expect(
+      parseCompanionMessage({ ...join("host", "peer-1"), role: "printer" }),
+    ).toBeNull();
+    expect(
+      parseCompanionMessage({ ...join("host", "peer-1"), id: 7 }),
+    ).toBeNull();
   });
 
   it("round trips an image and gives it an id to ack", () => {

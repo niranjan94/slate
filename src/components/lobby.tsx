@@ -110,7 +110,7 @@ export function Lobby() {
         <p className="mt-[18px] h-4 text-[13px] text-peer">{error}</p>
 
         <p className="text-[11.5px] text-ink-ghost">
-          Powered by PeerJS and WebRTC.
+          Powered by Trystero and WebRTC.
         </p>
       </div>
     </div>

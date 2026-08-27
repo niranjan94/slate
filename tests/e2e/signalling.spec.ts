@@ -2,14 +2,14 @@ import { expect, test } from "@playwright/test";
 import { createBoard } from "./support/board";
 
 /**
- * The only test here that needs the outside world: it claims a slot on the
- * public PeerJS broker. A failure means the broker is unreachable, not that
- * the board is broken.
+ * The only test here that needs the outside world: it reaches the Nostr relay
+ * network. A failure means the relays are unreachable, not that the board is
+ * broken.
  */
-test("a new board claims its slot and waits for someone", async ({ page }) => {
+test("a new board opens and waits for someone", async ({ page }) => {
   await createBoard(page);
 
-  await expect(page.getByText("Waiting for the other person…")).toBeVisible({
+  await expect(page.getByText("Waiting for someone to join…")).toBeVisible({
     timeout: 30_000,
   });
 });

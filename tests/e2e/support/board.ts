@@ -42,7 +42,7 @@ export async function createBoard(page: Page): Promise<string> {
 
 /**
  * The entry panel does not wait for a peer, so a solo test can dismiss it
- * without depending on the signalling broker being reachable.
+ * without depending on the relay network being reachable.
  */
 export async function dismissGate(page: Page): Promise<void> {
   await page.getByRole("button", { name: "Start drawing" }).click();

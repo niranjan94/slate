@@ -1,9 +1,14 @@
-import Peer, { type DataConnection } from "peerjs";
+import {
+  type DataPayload,
+  joinRoom,
+  type MessageAction,
+  type Room,
+} from "trystero";
 import type * as awarenessProtocol from "y-protocols/awareness";
 import { removeAwarenessStates } from "y-protocols/awareness";
 import type * as Y from "yjs";
-import { peerConfig } from "./ice";
-import { peerSlotId, type Slot } from "./room";
+import { turnServers } from "./ice";
+import { PEER_NAMESPACE } from "./room";
 import {
   applyMessage,
   encodeAwareness,
@@ -12,39 +17,37 @@ import {
   toBytes,
 } from "./y-channel";
 
-/** A tab that just closed can hold its broker id briefly; retry once before assuming the slot is taken. */
-const SLOT_GRACE_MS = 700;
-/** A full board can also be a pair of stale registrations, so keep re-checking rather than dead-ending. */
-const FULL_RETRY_MS = 4000;
-const DIAL_ATTEMPTS_BEFORE_TAKEOVER = 4;
+/** Yjs sync and awareness share one action; `y-channel` tags which is which. */
+const SYNC_ACTION = "y";
 
 export type LinkStatus =
   | "connecting"
   | "waiting"
   | "connected"
   | "reconnecting"
-  | "full"
   | "error";
 
-type Timer = ReturnType<typeof setTimeout>;
+type AwarenessChanges = {
+  added: number[];
+  updated: number[];
+  removed: number[];
+};
 
 /**
- * Connects two tabs over a WebRTC data channel and pipes the Yjs sync and
- * awareness protocols across it.
+ * Connects everyone on a board over WebRTC data channels and pipes the Yjs sync
+ * and awareness protocols across them.
  *
- * Both sides race for slot `a` on the PeerJS broker. The loser takes slot `b`
- * and dials `a`, so join order does not matter. If `a` stops answering, the
- * holder of `b` releases its own slot and claims `a`, which lets the surviving
- * tab keep the room reachable for whoever arrives next.
+ * Trystero matches peers through the Nostr relay network, so there is no broker
+ * to claim an id on and no seat limit. Peers form a full mesh, which is why
+ * nothing arriving from one peer is ever relayed on to the others.
  */
 export class PeerLink {
-  private peer: Peer | null = null;
-  private conn: DataConnection | null = null;
-  private slot: Slot | null = null;
-  private dialAttempts = 0;
+  private room: Room | null = null;
+  private sync: MessageAction<DataPayload> | null = null;
+  /** Which Yjs clients sit behind which peer, so a departure retires only theirs. */
+  private clientsByPeer = new Map<string, Set<number>>();
   private everConnected = false;
   private disposed = false;
-  private timers = new Set<Timer>();
   private status: LinkStatus = "connecting";
 
   constructor(
@@ -55,29 +58,57 @@ export class PeerLink {
   ) {}
 
   start(): void {
+    if (this.disposed || this.room) return;
+
+    const room = joinRoom(
+      { appId: PEER_NAMESPACE, turnConfig: turnServers() },
+      this.code,
+      {
+        // Fires per failed handshake as well as per failed join, so it only
+        // means the board is unreachable while nobody else is on it.
+        onJoinError: () => {
+          if (this.disposed || this.clientsByPeer.size > 0) return;
+          this.setStatus(this.everConnected ? "reconnecting" : "error");
+        },
+      },
+    );
+    this.room = room;
+    this.sync = room.makeAction<DataPayload>(SYNC_ACTION);
+    this.sync.onMessage = (data, { peerId }) => this.receive(peerId, data);
+
+    room.onPeerJoin = (peerId) => {
+      if (this.disposed) return;
+      this.clientsByPeer.set(peerId, new Set());
+      this.everConnected = true;
+      this.setStatus("connected");
+      // A peer that just arrived knows nothing of this board, so the sync
+      // exchange and this tab's presence both start from here.
+      this.sendTo(peerId, encodeSyncStep1(this.doc));
+      this.sendTo(peerId, encodeAwareness(this.awareness, [this.doc.clientID]));
+    };
+
+    room.onPeerLeave = (peerId) => {
+      if (this.disposed) return;
+      this.dropAwarenessOf(peerId);
+      if (this.clientsByPeer.size === 0) this.setStatus(this.idleStatus());
+    };
+
     this.doc.on("update", this.handleDocUpdate);
     this.awareness.on("update", this.handleAwarenessUpdate);
-    this.claim("a", true);
+    this.setStatus(this.idleStatus());
   }
 
   destroy(): void {
     this.disposed = true;
     this.doc.off("update", this.handleDocUpdate);
     this.awareness.off("update", this.handleAwarenessUpdate);
-    for (const timer of this.timers) clearTimeout(timer);
-    this.timers.clear();
-    this.dropRemoteAwareness();
-    this.conn?.close();
-    this.conn = null;
-    this.teardownPeer();
-  }
-
-  private later(fn: () => void, ms: number): void {
-    const timer = setTimeout(() => {
-      this.timers.delete(timer);
-      if (!this.disposed) fn();
-    }, ms);
-    this.timers.add(timer);
+    for (const peerId of [...this.clientsByPeer.keys()]) {
+      this.dropAwarenessOf(peerId);
+    }
+    const room = this.room;
+    this.room = null;
+    this.sync = null;
+    void room?.leave();
   }
 
   private setStatus(status: LinkStatus): void {
@@ -90,203 +121,62 @@ export class PeerLink {
     return this.everConnected ? "reconnecting" : "waiting";
   }
 
-  private teardownPeer(): void {
-    const peer = this.peer;
-    this.peer = null;
-    this.slot = null;
-    peer?.destroy();
-  }
-
-  private claim(slot: Slot, graceRetry: boolean): void {
-    if (this.disposed) return;
-    this.setStatus(this.everConnected ? "reconnecting" : "connecting");
-
-    const peer = new Peer(peerSlotId(this.code, slot), {
-      debug: 0,
-      config: peerConfig(),
-    });
-    this.peer = peer;
-
-    peer.on("open", () => {
-      if (this.disposed || this.peer !== peer) {
-        peer.destroy();
-        return;
-      }
-      this.slot = slot;
-      this.setStatus(this.idleStatus());
-      if (slot === "b") this.dial();
-    });
-
-    peer.on("connection", (conn) => this.adopt(conn));
-
-    peer.on("disconnected", () => {
-      if (this.disposed || this.peer !== peer || peer.destroyed) return;
-      this.setStatus(this.everConnected ? "reconnecting" : "connecting");
-      try {
-        peer.reconnect();
-      } catch {
-        this.later(() => this.restart(), 2000);
-      }
-    });
-
-    peer.on("error", (error) => {
-      if (this.disposed || this.peer !== peer) return;
-      this.handlePeerError(peer, slot, graceRetry, error.type);
+  private sendTo(peerId: string, bytes: Uint8Array): void {
+    void this.sync?.send(bytes, { target: peerId })?.catch(() => {
+      // A channel that dies mid-send surfaces through onPeerLeave.
     });
   }
 
-  private handlePeerError(
-    peer: Peer,
-    slot: Slot,
-    graceRetry: boolean,
-    type: string,
-  ): void {
-    if (type === "unavailable-id") {
-      this.peer = null;
-      peer.destroy();
-      if (graceRetry) {
-        this.later(() => this.claim(slot, false), SLOT_GRACE_MS);
-      } else if (slot === "a") {
-        this.claim("b", true);
-      } else {
-        this.setStatus("full");
-        this.later(() => this.restart(), FULL_RETRY_MS);
-      }
-      return;
-    }
-
-    if (type === "peer-unavailable") {
-      this.retryDial();
-      return;
-    }
-
-    if (type === "browser-incompatible") {
-      this.setStatus("error");
-      return;
-    }
-
-    this.setStatus(this.everConnected ? "reconnecting" : "error");
-    this.later(() => this.restart(), 2500);
-  }
-
-  private restart(): void {
-    if (this.disposed) return;
-    this.conn?.close();
-    this.conn = null;
-    this.teardownPeer();
-    this.dialAttempts = 0;
-    this.claim("a", true);
-  }
-
-  private dial(): void {
-    if (this.disposed || !this.peer || this.conn) return;
-    this.adopt(
-      this.peer.connect(peerSlotId(this.code, "a"), { reliable: true }),
-    );
-  }
-
-  private retryDial(): void {
-    if (this.disposed || this.slot !== "b") return;
-    this.dialAttempts += 1;
-    this.setStatus(this.idleStatus());
-
-    if (this.dialAttempts >= DIAL_ATTEMPTS_BEFORE_TAKEOVER) {
-      this.dialAttempts = 0;
-      this.teardownPeer();
-      this.later(() => this.claim("a", true), 400);
-      return;
-    }
-    this.later(() => this.dial(), 700 * this.dialAttempts);
-  }
-
-  private adopt(conn: DataConnection): void {
-    if (this.disposed) {
-      conn.close();
-      return;
-    }
-    const previous = this.conn;
-    // Boards hold two. A third arrival is turned away rather than silently ignored.
-    if (previous && previous !== conn && previous.open) {
-      conn.close();
-      return;
-    }
-    this.conn = conn;
-    // A dial still waiting to answer is given up rather than left dangling.
-    if (previous && previous !== conn) previous.close();
-
-    conn.on("open", () => {
-      if (this.disposed || this.conn !== conn) return;
-      this.dialAttempts = 0;
-      this.everConnected = true;
-      this.setStatus("connected");
-      this.send(conn, encodeSyncStep1(this.doc));
-      this.sendAwareness([this.doc.clientID]);
+  private broadcast(bytes: Uint8Array): void {
+    if (this.clientsByPeer.size === 0) return;
+    void this.sync?.send(bytes)?.catch(() => {
+      // As above: a dead channel is reported by the room, not by the send.
     });
-
-    conn.on("data", (data) => {
-      if (this.conn === conn) this.receive(conn, data);
-    });
-
-    conn.on("close", () => this.handleConnClosed(conn));
-    conn.on("error", () => this.handleConnClosed(conn));
   }
 
-  private handleConnClosed(conn: DataConnection): void {
-    if (this.conn !== conn) return;
-    this.conn = null;
-    this.dropRemoteAwareness();
-    if (this.disposed) return;
-    this.setStatus("reconnecting");
-    if (this.slot === "b") this.retryDial();
-  }
-
-  private dropRemoteAwareness(): void {
-    const remote = [...this.awareness.getStates().keys()].filter(
-      (id) => id !== this.doc.clientID,
-    );
-    if (remote.length > 0) {
-      removeAwarenessStates(this.awareness, remote, "link");
+  private dropAwarenessOf(peerId: string): void {
+    const clients = this.clientsByPeer.get(peerId);
+    this.clientsByPeer.delete(peerId);
+    if (clients && clients.size > 0) {
+      removeAwarenessStates(this.awareness, [...clients], "link");
     }
-  }
-
-  private send(conn: DataConnection, bytes: Uint8Array): void {
-    if (!conn.open) return;
-    try {
-      conn.send(bytes);
-    } catch {
-      // A channel that dies mid-send surfaces through the close handler.
-    }
-  }
-
-  private sendAwareness(clients: number[]): void {
-    const conn = this.conn;
-    if (conn) this.send(conn, encodeAwareness(this.awareness, clients));
   }
 
   private handleDocUpdate = (update: Uint8Array, origin: unknown): void => {
-    const conn = this.conn;
-    // Never bounce a change straight back to the peer that just sent it.
-    if (!conn || origin === conn) return;
-    this.send(conn, encodeUpdate(update));
+    // The mesh already carries a peer's update to everyone else directly, so
+    // passing it along would only loop it back.
+    if (typeof origin === "string" && this.clientsByPeer.has(origin)) return;
+    this.broadcast(encodeUpdate(update));
   };
 
   private handleAwarenessUpdate = (
-    changes: { added: number[]; updated: number[]; removed: number[] },
+    changes: AwarenessChanges,
     origin: unknown,
   ): void => {
-    if (origin === "link") return;
-    this.sendAwareness([
-      ...changes.added,
-      ...changes.updated,
-      ...changes.removed,
-    ]);
+    const known =
+      typeof origin === "string" ? this.clientsByPeer.get(origin) : undefined;
+    if (known) {
+      for (const client of [...changes.added, ...changes.updated]) {
+        known.add(client);
+      }
+      return;
+    }
+    // Only this tab's own presence is broadcast; see handleDocUpdate.
+    if (origin !== "local") return;
+    this.broadcast(
+      encodeAwareness(this.awareness, [
+        ...changes.added,
+        ...changes.updated,
+        ...changes.removed,
+      ]),
+    );
   };
 
-  private receive(conn: DataConnection, data: unknown): void {
+  private receive(peerId: string, data: unknown): void {
     const bytes = toBytes(data);
     if (!bytes) return;
-    applyMessage(bytes, this.doc, this.awareness, conn, (reply) =>
-      this.send(conn, reply),
+    applyMessage(bytes, this.doc, this.awareness, peerId, (reply) =>
+      this.sendTo(peerId, reply),
     );
   }
 }

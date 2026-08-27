@@ -6,7 +6,7 @@ const REACHABLE = 30_000;
 
 /**
  * Like signalling.spec.ts, this one needs the outside world: the phone reaches the
- * board through the public PeerJS broker. A failure means the broker is unreachable,
+ * board through the Nostr relay network. A failure means the relays are unreachable,
  * not that pairing is broken.
  */
 test("a photo sent from a phone lands on the board", async ({
@@ -57,9 +57,9 @@ test("an arriving photo switches to the tool that can move it", async ({
 });
 
 /**
- * How long an unregistered nonce takes to be declared expired depends on the broker
- * answering one dial and staying quiet for the next, so only the honest intermediate
- * state is asserted here. The terminal copy is not worth a timing dependent test.
+ * A nonce with nobody listening on it is only declared expired once a fixed wait
+ * elapses, so only the honest intermediate state is asserted here. The terminal
+ * copy is not worth a timing dependent test.
  */
 test("a phone with no board to reach says it is still looking", async ({
   page,

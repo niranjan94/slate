@@ -194,8 +194,9 @@ const frameOffset = (reach: number, visual: number, zoom: number) =>
   Math.max(reach, visual) / 2 / zoom;
 
 function peerLabel(status: LinkStatus, peers: PeerPresence[]): string {
-  if (status === "connected" && peers.length > 0) return peers[0].name;
-  if (status === "full") return "board full";
+  if (status === "connected" && peers.length > 0) {
+    return peers.length === 1 ? peers[0].name : `${peers.length} others`;
+  }
   if (status === "error") return "no connection";
   if (status === "reconnecting") return "reconnecting";
   return "just you";
@@ -1192,10 +1193,7 @@ export function Board({
   const gateVisible =
     !gateDismissed &&
     peers.length === 0 &&
-    (status === "connecting" ||
-      status === "waiting" ||
-      status === "full" ||
-      status === "error");
+    (status === "connecting" || status === "waiting" || status === "error");
 
   const reach = coarse ? HANDLE_REACH : MOUSE_REACH;
   const push = coarse ? HANDLE_PUSH : 0;

@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import type { LinkStatus } from "@/lib/peer-link";
 import { NameInput } from "./name-field";
 
@@ -39,23 +38,6 @@ export function RoomGate({
   onCopy,
   onDismiss,
 }: RoomGateProps) {
-  if (status === "full") {
-    return (
-      <Shell>
-        <p className="mt-2.5 mb-6 max-w-[34ch] text-[14.5px] leading-[1.55] text-ink-muted text-pretty">
-          Board <span className="font-medium text-ink">{code}</span> is already
-          full.
-        </p>
-        <Link
-          href="/"
-          className="flex w-full items-center justify-center rounded-xl bg-ink px-[18px] py-[15px] text-[15px] font-medium text-ink-invert transition hover:bg-black"
-        >
-          Start your own board
-        </Link>
-      </Shell>
-    );
-  }
-
   if (status === "error") {
     return (
       <Shell>
@@ -91,7 +73,7 @@ export function RoomGate({
         <span className="text-sm text-ink-muted">
           {status === "connecting"
             ? "Setting up your board…"
-            : "Waiting for the other person…"}
+            : "Waiting for someone to join…"}
         </span>
       </div>
 
