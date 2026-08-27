@@ -3,12 +3,13 @@
 [![CI](https://github.com/niranjan94/slate/actions/workflows/ci.yml/badge.svg)](https://github.com/niranjan94/slate/actions/workflows/ci.yml)
 
 A shared whiteboard in the browser. Draw, erase, place text and drop in
-pictures; everything you do appears on the other person's board as you do it.
+pictures; everything you do appears on every other board as you do it.
 Photograph something on your desk and it lands on the board, by pairing a phone
 to the tab you have open.
 
-Boards are peer-to-peer. PeerJS brokers the introduction between two browsers,
-after which board data travels directly over a WebRTC data channel. State is a
+Boards are peer-to-peer. [Trystero](https://trystero.dev) introduces the
+browsers on a board to each other over the Nostr relay network, after which
+board data travels directly over a WebRTC data channel. State is a
 [Yjs](https://yjs.dev) CRDT, so simultaneous edits merge rather than overwrite
 each other, and each board is cached in IndexedDB so a refresh does not lose it.
 
@@ -80,10 +81,10 @@ simultaneous edits, room codes, names, and ICE configuration.
 
 `pnpm test:e2e` builds the app, serves it, and drives Chromium through the
 drawing surface: ink, shapes, undo, erase, text placement and pruning, image
-import, zoom, naming, and what survives a reload. Two specs need the network and
-say so: one claims a slot on the public PeerJS broker, and one pairs a phone page
-to a board and sends a picture across it. A failure in either means the broker
-was unreachable rather than the board being broken.
+import, zoom, naming, and what survives a reload. Some specs need the network
+and say so: two boards finding each other and sharing a stroke, and a phone page
+pairing to a board and sending a picture across it. A failure in those means the
+Nostr relays were unreachable rather than the board being broken.
 
 A phone sized project runs `mobile.spec.ts` over the same build, dispatching real
 touches through CDP: Playwright's own input API drives the mouse, and the surface
@@ -91,15 +92,15 @@ turns on the pointer type and on how many touches are down, so mouse events woul
 exercise none of it. That spec is also where the layout is held to fitting, with
 nothing off an edge and nothing too small for a thumb.
 
-Phone pairing is the only peer to peer path the suite covers, and it covers it
-because both ends are Chromium pages in one browser. Two people on one board
-still needs a relay, a live broker and two engines, so that stays a manual check
-before deploying.
+The suite covers both peer to peer paths, two boards syncing and phone pairing,
+because every end is a Chromium page driven from one run. What it cannot cover is
+two browser engines: a board shared between Chromium and WebKit still needs a
+relay and two real browsers, so that stays a manual check before deploying.
 
 GitHub Actions runs the lint, type and unit checks alongside the browser suite
 on every push to `main` and every pull request, and keeps the traces from a
-failed browser run as an artifact. The two specs that need the broker run there
-as well, so an unreachable broker fails the run.
+failed browser run as an artifact. The specs that need the relay network run
+there as well, so unreachable relays fail the run.
 
 ## The site URL
 
@@ -196,8 +197,8 @@ touches the drawing surface. Commit messages follow
 [Conventional Commits](https://www.conventionalcommits.org).
 
 Two people on one board, across two machines or two browser engines, is the one
-thing the suite cannot check for you. It needs a live broker and a relay, so
-please say whether you tried it when a change touches the peer link.
+thing the suite cannot check for you. It needs the relay network and two real
+browsers, so please say whether you tried it when a change touches the peer link.
 
 ## License
 
