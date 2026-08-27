@@ -2,6 +2,8 @@
 
 [![CI](https://github.com/niranjan94/slate/actions/workflows/ci.yml/badge.svg)](https://github.com/niranjan94/slate/actions/workflows/ci.yml)
 
+**[slate.niranjan.io](https://slate.niranjan.io)**
+
 A shared whiteboard in the browser. Draw, erase, place text, drop in pictures, or
 scan a QR code to send photos from your phone. Everything appears on the other
 board as you do it.
